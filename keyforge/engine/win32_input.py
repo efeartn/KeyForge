@@ -1,13 +1,15 @@
-"""Native Win32 ctypes SendInput implementation for Windows 10/11 (x64/x86)."""
+"""Native Win32 ctypes SendInput implementation with cross-platform (macOS/Linux) compatibility."""
 
 from __future__ import annotations
 
 import ctypes
-from ctypes import wintypes
+import sys
 
 from keyforge.engine.backend import KEYFORGE_EXTRA_INFO
 from keyforge.models.action import MouseButton
 from keyforge.models.keymap import KeyInfo
+
+IS_WINDOWS = sys.platform == "win32"
 
 # Win32 Constants
 INPUT_MOUSE = 0
@@ -39,6 +41,13 @@ WHEEL_DELTA = 120
 
 MAPVK_VK_TO_VSC = 0
 
+# Portable Win32-equivalent C types so struct layouts can be inspected/tested on any OS
+WORD = ctypes.c_ushort
+DWORD = ctypes.c_ulong
+LONG = ctypes.c_long
+UINT = ctypes.c_uint
+BOOL = ctypes.c_int
+SHORT = ctypes.c_short
 ULONG_PTR = ctypes.c_size_t
 
 
@@ -46,11 +55,11 @@ class MOUSEINPUT(ctypes.Structure):
     """Win32 MOUSEINPUT structure."""
 
     _fields_ = [
-        ("dx", wintypes.LONG),
-        ("dy", wintypes.LONG),
-        ("mouseData", wintypes.DWORD),
-        ("dwFlags", wintypes.DWORD),
-        ("time", wintypes.DWORD),
+        ("dx", LONG),
+        ("dy", LONG),
+        ("mouseData", DWORD),
+        ("dwFlags", DWORD),
+        ("time", DWORD),
         ("dwExtraInfo", ULONG_PTR),
     ]
 
@@ -59,10 +68,10 @@ class KEYBDINPUT(ctypes.Structure):
     """Win32 KEYBDINPUT structure."""
 
     _fields_ = [
-        ("wVk", wintypes.WORD),
-        ("wScan", wintypes.WORD),
-        ("dwFlags", wintypes.DWORD),
-        ("time", wintypes.DWORD),
+        ("wVk", WORD),
+        ("wScan", WORD),
+        ("dwFlags", DWORD),
+        ("time", DWORD),
         ("dwExtraInfo", ULONG_PTR),
     ]
 
@@ -71,9 +80,9 @@ class HARDWAREINPUT(ctypes.Structure):
     """Win32 HARDWAREINPUT structure."""
 
     _fields_ = [
-        ("uMsg", wintypes.DWORD),
-        ("wParamL", wintypes.WORD),
-        ("wParamH", wintypes.WORD),
+        ("uMsg", DWORD),
+        ("wParamL", WORD),
+        ("wParamH", WORD),
     ]
 
 
@@ -92,7 +101,7 @@ class INPUT(ctypes.Structure):
 
     _anonymous_ = ("_u",)
     _fields_ = [
-        ("type", wintypes.DWORD),
+        ("type", DWORD),
         ("_u", _INPUT_UNION),
     ]
 
@@ -101,38 +110,64 @@ class POINT(ctypes.Structure):
     """Win32 POINT structure."""
 
     _fields_ = [
-        ("x", wintypes.LONG),
-        ("y", wintypes.LONG),
+        ("x", LONG),
+        ("y", LONG),
     ]
 
 
-_user32 = ctypes.windll.user32
-_user32.SendInput.argtypes = [wintypes.UINT, ctypes.POINTER(INPUT), ctypes.c_int]
-_user32.SendInput.restype = wintypes.UINT
+_user32 = None
+if IS_WINDOWS:
+    _user32 = ctypes.windll.user32
+    _user32.SendInput.argtypes = [UINT, ctypes.POINTER(INPUT), ctypes.c_int]
+    _user32.SendInput.restype = UINT
 
-_user32.MapVirtualKeyW.argtypes = [wintypes.UINT, wintypes.UINT]
-_user32.MapVirtualKeyW.restype = wintypes.UINT
+    _user32.MapVirtualKeyW.argtypes = [UINT, UINT]
+    _user32.MapVirtualKeyW.restype = UINT
 
-_user32.GetCursorPos.argtypes = [ctypes.POINTER(POINT)]
-_user32.GetCursorPos.restype = wintypes.BOOL
+    _user32.GetCursorPos.argtypes = [ctypes.POINTER(POINT)]
+    _user32.GetCursorPos.restype = BOOL
 
-_user32.SetCursorPos.argtypes = [ctypes.c_int, ctypes.c_int]
-_user32.SetCursorPos.restype = wintypes.BOOL
+    _user32.SetCursorPos.argtypes = [ctypes.c_int, ctypes.c_int]
+    _user32.SetCursorPos.restype = BOOL
 
-_user32.GetAsyncKeyState.argtypes = [ctypes.c_int]
-_user32.GetAsyncKeyState.restype = wintypes.SHORT
+    _user32.GetAsyncKeyState.argtypes = [ctypes.c_int]
+    _user32.GetAsyncKeyState.restype = SHORT
+
+
+def get_async_key_state(vk_code: int) -> bool:
+    """Safely query whether a Virtual-Key code is currently depressed (returns False on non-Windows)."""
+    if _user32 is None:
+        return False
+    return bool(_user32.GetAsyncKeyState(int(vk_code)) & 0x8000)
+
+
+def get_system_cursor_pos() -> tuple[int, int]:
+    """Safely query the OS cursor position across Windows, macOS, and Linux."""
+    if _user32 is not None:
+        pt = POINT()
+        if _user32.GetCursorPos(ctypes.byref(pt)):
+            return (int(pt.x), int(pt.y))
+    return (0, 0)
 
 
 def _send_single_input(inp: INPUT) -> int:
-    """Dispatch a single Win32 INPUT struct via user32.SendInput."""
+    """Dispatch a single Win32 INPUT struct via user32.SendInput (no-op on non-Windows)."""
+    if _user32 is None:
+        return 0
     return int(_user32.SendInput(1, ctypes.byref(inp), ctypes.sizeof(INPUT)))
 
 
 class Win32InputBackend:
-    """Production Windows input injection backend using user32.SendInput."""
+    """Production input injection backend (Native user32.SendInput on Windows, safe fallback on POSIX)."""
+
+    def __init__(self) -> None:
+        self._fallback_x = 0
+        self._fallback_y = 0
 
     def key_down(self, key: KeyInfo) -> None:
-        scan = key.scan_code or int(_user32.MapVirtualKeyW(key.vk_code, MAPVK_VK_TO_VSC))
+        scan = key.scan_code
+        if not scan and _user32 is not None:
+            scan = int(_user32.MapVirtualKeyW(key.vk_code, MAPVK_VK_TO_VSC))
         flags = 0
         if key.is_extended:
             flags |= KEYEVENTF_EXTENDEDKEY
@@ -149,7 +184,9 @@ class Win32InputBackend:
         _send_single_input(inp)
 
     def key_up(self, key: KeyInfo) -> None:
-        scan = key.scan_code or int(_user32.MapVirtualKeyW(key.vk_code, MAPVK_VK_TO_VSC))
+        scan = key.scan_code
+        if not scan and _user32 is not None:
+            scan = int(_user32.MapVirtualKeyW(key.vk_code, MAPVK_VK_TO_VSC))
         flags = KEYEVENTF_KEYUP
         if key.is_extended:
             flags |= KEYEVENTF_EXTENDEDKEY
@@ -197,6 +234,8 @@ class Win32InputBackend:
 
     def move_cursor(self, x: int, y: int, relative: bool = False) -> None:
         if relative:
+            self._fallback_x += int(x)
+            self._fallback_y += int(y)
             inp = INPUT(
                 type=INPUT_MOUSE,
                 mi=MOUSEINPUT(
@@ -210,7 +249,10 @@ class Win32InputBackend:
             )
             _send_single_input(inp)
         else:
-            _user32.SetCursorPos(int(x), int(y))
+            self._fallback_x = int(x)
+            self._fallback_y = int(y)
+            if _user32 is not None:
+                _user32.SetCursorPos(int(x), int(y))
 
     def scroll(self, dx: int = 0, dy: int = 0) -> None:
         if dy != 0:
@@ -243,10 +285,9 @@ class Win32InputBackend:
             _send_single_input(inp_h)
 
     def get_cursor_pos(self) -> tuple[int, int]:
-        pt = POINT()
-        if _user32.GetCursorPos(ctypes.byref(pt)):
-            return (int(pt.x), int(pt.y))
-        return (0, 0)
+        if _user32 is not None:
+            return get_system_cursor_pos()
+        return (self._fallback_x, self._fallback_y)
 
     @staticmethod
     def _button_flags(button: MouseButton, is_up: bool) -> tuple[int, int]:

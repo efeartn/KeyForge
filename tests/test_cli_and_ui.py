@@ -93,5 +93,17 @@ def test_gui_controller_lifecycle(tmp_path: Path) -> None:
         dlg._populate_from_action(app.profile.actions[0])
         dlg._on_submit()
         assert len(saved_from_dialog) == 1
+
+        # Test new Studio UI features: template chips, filter, bulk enable/disable, reverse
+        app._apply_template_chip("Press E -> Wait 200ms -> Click -> Press 1")
+        assert len(app.profile.actions) == 4
+        app.set_all_steps_enabled(False)
+        assert all(not a.enabled for a in app.profile.actions)
+        app.set_all_steps_enabled(True)
+        assert all(a.enabled for a in app.profile.actions)
+        app.reverse_steps()
+        assert app.profile.actions[0].key == "1"
+        app.filter_entry.insert(0, "Wait")
+        app._on_filter_changed()
     finally:
         app._on_close()

@@ -1,13 +1,13 @@
-"""Modal dialog for creating or editing a single MacroAction step."""
+"""Modal dialog for creating or editing a single MacroAction step (Cross-Platform)."""
 
 from __future__ import annotations
 
-import ctypes
+import contextlib
 from collections.abc import Callable
 
 import customtkinter as ctk
 
-from keyforge.engine.win32_input import POINT
+from keyforge.engine.win32_input import IS_WINDOWS, get_system_cursor_pos
 from keyforge.models.action import (
     ActionType,
     ClickType,
@@ -25,11 +25,10 @@ from keyforge.ui.theme import (
     BG_CARD,
     BG_INPUT,
     BG_PANEL,
+    BORDER_SUBTLE,
     TEXT_PRIMARY,
     TEXT_SECONDARY,
 )
-
-_user32 = ctypes.windll.user32
 
 
 class StepEditorDialog(ctk.CTkToplevel):
@@ -43,7 +42,7 @@ class StepEditorDialog(ctk.CTkToplevel):
     ) -> None:
         super().__init__(master)
         self.title("Edit Macro Step" if initial_action else "Add Macro Step")
-        self.geometry("500x520")
+        self.geometry("520x540")
         self.resizable(False, False)
         self.configure(fg_color=BG_PANEL)
 
@@ -52,7 +51,8 @@ class StepEditorDialog(ctk.CTkToplevel):
         self.result_action: MacroAction | None = None
 
         self.transient(master)
-        self.grab_set()
+        with contextlib.suppress(Exception):
+            self.grab_set()
 
         self._build_ui()
         if initial_action is not None:
@@ -63,13 +63,19 @@ class StepEditorDialog(ctk.CTkToplevel):
     def _build_ui(self) -> None:
         header = ctk.CTkLabel(
             self,
-            text="Configure Macro Action Step",
+            text="⚡ Configure Macro Action Step",
             font=ctk.CTkFont(size=17, weight="bold"),
             text_color=TEXT_PRIMARY,
         )
         header.pack(padx=20, pady=(16, 10), anchor="w")
 
-        form = ctk.CTkFrame(self, fg_color=BG_CARD, corner_radius=10)
+        form = ctk.CTkFrame(
+            self,
+            fg_color=BG_CARD,
+            corner_radius=12,
+            border_width=1,
+            border_color=BORDER_SUBTLE,
+        )
         form.pack(fill="both", expand=True, padx=20, pady=6)
 
         # Action Type
@@ -108,7 +114,7 @@ class StepEditorDialog(ctk.CTkToplevel):
             text="",
             text_color=ACCENT_DANGER,
             font=ctk.CTkFont(size=12),
-            wraplength=450,
+            wraplength=460,
         )
         self.error_label.pack(padx=20, pady=(2, 2))
 
@@ -151,7 +157,7 @@ class StepEditorDialog(ctk.CTkToplevel):
             self.key_combo = ctk.CTkComboBox(
                 r1,
                 values=list_common_keys(),
-                width=180,
+                width=190,
                 fg_color=BG_INPUT,
             )
             self.key_combo.set("E")
@@ -219,7 +225,7 @@ class StepEditorDialog(ctk.CTkToplevel):
             ctk.CTkButton(
                 r3,
                 text="Pick Current XY",
-                width=95,
+                width=105,
                 fg_color=ACCENT_SUCCESS,
                 command=self._capture_current_xy,
             ).pack(side="left", padx=6)
@@ -254,7 +260,7 @@ class StepEditorDialog(ctk.CTkToplevel):
             ctk.CTkButton(
                 r2,
                 text="Pick Current XY",
-                width=95,
+                width=105,
                 fg_color=ACCENT_SUCCESS,
                 command=self._capture_current_xy,
             ).pack(side="left", padx=6)
@@ -262,14 +268,14 @@ class StepEditorDialog(ctk.CTkToplevel):
         elif atype == ActionType.MOUSE_SCROLL:
             r1 = ctk.CTkFrame(self.dynamic_frame, fg_color="transparent")
             r1.pack(fill="x", pady=6)
-            ctk.CTkLabel(r1, text="Vertical Ticks (+Up/-Dn):", width=150, anchor="w").pack(side="left")
+            ctk.CTkLabel(r1, text="Vertical Ticks (+Up/-Dn):", width=155, anchor="w").pack(side="left")
             self.scroll_dy_entry = ctk.CTkEntry(r1, width=100, fg_color=BG_INPUT)
             self.scroll_dy_entry.insert(0, "-3")
             self.scroll_dy_entry.pack(side="left", padx=8)
 
             r2 = ctk.CTkFrame(self.dynamic_frame, fg_color="transparent")
             r2.pack(fill="x", pady=6)
-            ctk.CTkLabel(r2, text="Horizontal Ticks:", width=150, anchor="w").pack(side="left")
+            ctk.CTkLabel(r2, text="Horizontal Ticks:", width=155, anchor="w").pack(side="left")
             self.scroll_dx_entry = ctk.CTkEntry(r2, width=100, fg_color=BG_INPUT)
             self.scroll_dx_entry.insert(0, "0")
             self.scroll_dx_entry.pack(side="left", padx=8)
@@ -290,13 +296,15 @@ class StepEditorDialog(ctk.CTkToplevel):
             self.repeat_dsl_entry.pack(side="left", padx=8)
 
     def _capture_current_xy(self) -> None:
-        pt = POINT()
-        _user32.GetCursorPos(ctypes.byref(pt))
+        if IS_WINDOWS:
+            cx, cy = get_system_cursor_pos()
+        else:
+            cx, cy = self.winfo_pointerx(), self.winfo_pointery()
         if hasattr(self, "x_entry") and hasattr(self, "y_entry"):
             self.x_entry.delete(0, "end")
-            self.x_entry.insert(0, str(pt.x))
+            self.x_entry.insert(0, str(cx))
             self.y_entry.delete(0, "end")
-            self.y_entry.insert(0, str(pt.y))
+            self.y_entry.insert(0, str(cy))
 
     def _populate_from_action(self, act: MacroAction) -> None:
         self.type_var.set(act.action_type.value)

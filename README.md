@@ -3,7 +3,7 @@
 **A Modern, Security-Hardened, FOSS Visual Keyboard & Mouse Macro Builder, Recorder, and Auto-Clicker for Windows.**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Platform: Windows 10/11](https://img.shields.io/badge/Platform-Windows%2010%2F11%20(x64)-0078D6)](https://github.com/efeartn/KeyForge)
+[![Platform: Windows | macOS | Linux](https://img.shields.io/badge/Platform-Windows%20%7C%20macOS%20%7C%20Linux-0078D6)](https://github.com/efeartn/KeyForge/actions)
 [![Python: 3.10+](https://img.shields.io/badge/Python-3.10%2B-3776AB)](pyproject.toml)
 [![Security: SHA-256 Signed Profiles](https://img.shields.io/badge/Security-SHA--256%20Verified%20%2B%20Static%20Auditor-10B981)](SECURITY.md)
 
@@ -120,11 +120,14 @@ python -m keyforge --profile my_combo.kfmacro.json --audit
 python -m keyforge --profile my_combo.kfmacro.json
 ```
 
-### Building a Standalone `KeyForge.exe`
+### Building a Standalone Executable (`Windows .exe`, `macOS`, `Linux`)
+KeyForge automatically compiles standalone binaries for **Windows (`KeyForge-Windows-x64.exe`)**, **macOS (`KeyForge-macOS-arm64`)**, and **Linux (`KeyForge-Linux-x64`)** on every push and release tag via [GitHub Actions](.github/workflows/ci.yml), complete with `SHA256SUMS.txt` checksums.
+
+To compile locally on your machine:
 ```powershell
 pip install pyinstaller
 python scripts/build_exe.py
-# Output binary: dist/KeyForge.exe
+# Output binary + SHA-256 checksum in dist/
 ```
 
 ---

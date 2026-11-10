@@ -1,21 +1,24 @@
-name: KeyForge CI & Security Suite
+name: KeyForge Cross-Platform CI, Security & Release Compiler
 
 on:
   push:
     branches: [ main, master ]
+    tags: [ "v*" ]
   pull_request:
     branches: [ main, master ]
+  workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   test-and-audit:
-    name: Windows Test & Security Linter (Python ${{ matrix.python-version }})
-    runs-on: windows-latest
+    name: Test & Security Audit (${{ matrix.os }} / Python ${{ matrix.python-version }})
+    runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
+        os: [windows-latest, macos-latest, ubuntu-latest]
         python-version: ["3.11", "3.12", "3.13"]
 
     steps:
@@ -28,7 +31,13 @@ jobs:
           python-version: ${{ matrix.python-version }}
           cache: "pip"
 
-      - name: Install Dependencies
+      - name: Install Linux Tkinter Dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y python3-tk xvfb
+
+      - name: Install KeyForge & Dev Dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -e ".[dev]"
@@ -38,6 +47,82 @@ jobs:
           python -m ruff check keyforge tests
           python -m ruff format --check keyforge tests
 
-      - name: Run Unit, Security & Engine Tests
+      - name: Run Unit, Security & Engine Test Suite
         run: |
           python -m pytest -k "not test_gui_controller_lifecycle" --cov=keyforge --cov-report=term-missing
+
+  compile-executables:
+    name: Compile Standalone Binary (${{ matrix.os }})
+    needs: test-and-audit
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest, ubuntu-latest]
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Install Linux Build Dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y python3-tk binutils
+
+      - name: Install PyInstaller & Package Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e . pyinstaller
+
+      - name: Compile Standalone Executable via PyInstaller
+        run: |
+          python scripts/build_exe.py
+
+      - name: Smoke-Test Compiled Binary (CLI Dry-Run & Security Audit)
+        shell: bash
+        run: |
+          ls -la dist/
+          BIN=$(find dist -maxdepth 1 -type f ! -name "*.txt" | head -n 1)
+          chmod +x "$BIN" || true
+          "$BIN" --version
+          "$BIN" --expr "Press E -> Wait 50ms -> Click -> Press 1" --repeat 2 --dry-run
+
+      - name: Upload Compiled Binary & SHA-256 Checksum Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: KeyForge-Binaries-${{ matrix.os }}
+          path: |
+            dist/*
+          if-no-files-found: error
+
+  publish-release:
+    name: Publish GitHub Release Binaries
+    needs: compile-executables
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download All Compiled Platform Binaries
+        uses: actions/download-artifact@v4
+        with:
+          path: release-assets
+          merge-multiple: true
+
+      - name: Generate Combined SHA256SUMS.txt
+        run: |
+          cd release-assets
+          cat *.sha256.txt > SHA256SUMS.txt
+          ls -lh
+
+      - name: Create GitHub Release & Attach Binaries
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: |
+            release-assets/*

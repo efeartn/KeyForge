@@ -3,14 +3,13 @@
 from __future__ import annotations
 
 import contextlib
-import ctypes
 import threading
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
 
 from keyforge.engine.backend import KEYFORGE_EXTRA_INFO
-from keyforge.engine.win32_input import POINT
+from keyforge.engine.win32_input import get_async_key_state, get_system_cursor_pos
 from keyforge.models.action import (
     ActionType,
     ClickType,
@@ -25,8 +24,6 @@ from keyforge.models.action import (
 )
 from keyforge.models.keymap import VK_TO_KEY, parse_key_combo
 from keyforge.security.validator import MAX_TOTAL_STEPS
-
-_user32 = ctypes.windll.user32
 
 # Mouse Virtual-Key codes for state polling
 VK_LBUTTON = 0x01
@@ -312,29 +309,28 @@ class MacroRecorder:
                 self._on_step_recorded(action)
 
     def _os_poll_loop(self) -> None:
-        """200 Hz non-blocking Win32 key/mouse state transition poller."""
+        """200 Hz non-blocking key/mouse state transition poller."""
         monitored_key_vks = [vk for vk in VK_TO_KEY if vk not in (0x10, 0x11, 0x12)]
-        prev_key_down: dict[int, bool] = {vk: bool(_user32.GetAsyncKeyState(vk) & 0x8000) for vk in monitored_key_vks}
-        prev_mouse_down: dict[int, bool] = {vk: bool(_user32.GetAsyncKeyState(vk) & 0x8000) for vk in _MOUSE_VK_MAP}
+        prev_key_down: dict[int, bool] = {vk: get_async_key_state(vk) for vk in monitored_key_vks}
+        prev_mouse_down: dict[int, bool] = {vk: get_async_key_state(vk) for vk in _MOUSE_VK_MAP}
 
         while not self._stop_event.wait(timeout=0.005):
             now = time.perf_counter()
             for vk in monitored_key_vks:
-                is_down = bool(_user32.GetAsyncKeyState(vk) & 0x8000)
+                is_down = get_async_key_state(vk)
                 if is_down != prev_key_down[vk]:
                     prev_key_down[vk] = is_down
                     self.feed_key_event(vk, is_down=is_down, timestamp_s=now)
 
             for vk, btn in _MOUSE_VK_MAP.items():
-                is_down = bool(_user32.GetAsyncKeyState(vk) & 0x8000)
+                is_down = get_async_key_state(vk)
                 if is_down != prev_mouse_down[vk]:
                     prev_mouse_down[vk] = is_down
-                    pt = POINT()
-                    _user32.GetCursorPos(ctypes.byref(pt))
+                    cx, cy = get_system_cursor_pos()
                     self.feed_mouse_button_event(
                         btn,
                         is_down=is_down,
-                        x=int(pt.x),
-                        y=int(pt.y),
+                        x=cx,
+                        y=cy,
                         timestamp_s=now,
                     )

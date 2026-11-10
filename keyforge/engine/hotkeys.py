@@ -3,13 +3,11 @@
 from __future__ import annotations
 
 import contextlib
-import ctypes
 import threading
 from collections.abc import Callable
 
+from keyforge.engine.win32_input import get_async_key_state
 from keyforge.models.keymap import KeyInfo, parse_key_combo
-
-_user32 = ctypes.windll.user32
 
 
 class GlobalHotkeyManager:
@@ -81,7 +79,7 @@ class GlobalHotkeyManager:
             callbacks_to_fire: list[Callable[[], None]] = []
             with self._lock:
                 for name, (keys, callback) in self._bindings.items():
-                    all_pressed = all(bool(_user32.GetAsyncKeyState(k.vk_code) & 0x8000) for k in keys)
+                    all_pressed = all(get_async_key_state(k.vk_code) for k in keys)
                     was_pressed = self._was_active.get(name, False)
                     if all_pressed and not was_pressed:
                         self._was_active[name] = True
