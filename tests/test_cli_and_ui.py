@@ -53,6 +53,19 @@ def test_cli_export_audit_and_dry_run(tmp_path: Path) -> None:
     rc_crit = main(["--expr", "Press Win+R -> Wait 100ms", "--audit"])
     assert rc_crit == 1
 
+    # 5. Verify windowless (--noconsole / pythonw) execution when sys.stdout/stderr are None
+    import sys
+
+    orig_out, orig_err = sys.stdout, sys.stderr
+    try:
+        sys.stdout = None  # type: ignore[assignment]
+        sys.stderr = None  # type: ignore[assignment]
+        rc_noconsole = main(["--expr", "Press E -> Wait 50ms", "--repeat", "1", "--dry-run"])
+        assert rc_noconsole == 0
+    finally:
+        sys.stdout = orig_out
+        sys.stderr = orig_err
+
 
 def test_gui_controller_lifecycle(tmp_path: Path) -> None:
     from keyforge.ui.app import KeyForgeApp

@@ -48,6 +48,8 @@ def build_executable() -> int:
         "--add-data",
         add_data_arg,
     ]
+    if sys.platform == "win32":
+        cmd.append("--noconsole")
     if icon_file.exists():
         cmd.extend(["--icon", str(icon_file)])
     cmd.append(str(entry))

@@ -40,6 +40,9 @@ dev = [
 ]
 
 [project.scripts]
+keyforge-cli = "keyforge.main:main"
+
+[project.gui-scripts]
 keyforge = "keyforge.main:main"
 
 [tool.setuptools.packages.find]

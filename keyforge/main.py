@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 import argparse
+import contextlib
+import ctypes
+import io
 import sys
 from collections.abc import Sequence
 
@@ -14,6 +17,39 @@ from keyforge.models.dsl import format_actions_to_dsl, parse_quick_expression
 from keyforge.models.profile import MacroProfile, RepeatMode, create_default_profile
 from keyforge.security.auditor import audit_profile
 from keyforge.security.integrity import load_profile_secure, save_profile_secure
+
+
+def _ensure_standard_streams(has_cli_args: bool) -> None:
+    """Ensure sys.stdout and sys.stderr are valid streams in --noconsole / pythonw GUI builds."""
+    if sys.platform == "win32" and has_cli_args and (sys.stdout is None or sys.stderr is None):
+        with contextlib.suppress(Exception):
+            if ctypes.windll.kernel32.AttachConsole(-1):
+                if sys.stdout is None:
+                    sys.stdout = open("CONOUT$", "w", encoding="utf-8", buffering=1)  # noqa: SIM115
+                if sys.stderr is None:
+                    sys.stderr = open("CONOUT$", "w", encoding="utf-8", buffering=1)  # noqa: SIM115
+
+    if sys.stdout is None:
+        sys.stdout = io.StringIO()
+    if sys.stderr is None:
+        sys.stderr = io.StringIO()
+
+
+def _hide_transient_console_on_windows() -> None:
+    """Hide the background console window on Windows when launched directly into GUI mode."""
+    if sys.platform != "win32":
+        return
+    with contextlib.suppress(Exception):
+        kernel32 = ctypes.windll.kernel32
+        user32 = ctypes.windll.user32
+        hwnd = kernel32.GetConsoleWindow()
+        if hwnd:
+            proc_list = (ctypes.c_uint32 * 4)()
+            count = kernel32.GetConsoleProcessList(proc_list, 4)
+            # If this process owns the console window (double-clicked .exe/.py), hide and detach it
+            if count <= 1:
+                user32.ShowWindow(hwnd, 0)  # SW_HIDE = 0
+                kernel32.FreeConsole()
 
 
 def build_arg_parser() -> argparse.ArgumentParser:
@@ -69,6 +105,9 @@ def build_arg_parser() -> argparse.ArgumentParser:
 
 def main(argv: Sequence[str] | None = None) -> int:
     """Main entrypoint supporting both Desktop GUI and headless CLI modes."""
+    effective_argv = list(sys.argv[1:] if argv is None else argv)
+    _ensure_standard_streams(has_cli_args=bool(effective_argv))
+
     parser = build_arg_parser()
     args = parser.parse_args(argv)
 
@@ -122,7 +161,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             print(f"Error: {exc}", file=sys.stderr)
             return 1
 
-    # 3. Default: Launch Desktop GUI
+    # 3. Default: Launch Desktop GUI (with zero background terminal window)
+    _hide_transient_console_on_windows()
     from keyforge.ui.app import KeyForgeApp
 
     app = KeyForgeApp()
