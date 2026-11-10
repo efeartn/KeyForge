@@ -8,6 +8,10 @@ on:
     branches: [ main, master ]
   workflow_dispatch:
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: write
 
@@ -18,8 +22,21 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [windows-latest, macos-latest, ubuntu-latest]
-        python-version: ["3.11", "3.12", "3.13"]
+        include:
+          - os: windows-latest
+            python-version: "3.11"
+          - os: windows-latest
+            python-version: "3.12"
+          - os: windows-latest
+            python-version: "3.13"
+          - os: ubuntu-latest
+            python-version: "3.11"
+          - os: ubuntu-latest
+            python-version: "3.12"
+          - os: ubuntu-latest
+            python-version: "3.13"
+          - os: macos-latest
+            python-version: "3.12"
 
     steps:
       - name: Checkout Repository
@@ -53,7 +70,6 @@ jobs:
 
   compile-executables:
     name: Compile Standalone Binary (${{ matrix.os }})
-    needs: test-and-audit
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -104,7 +120,7 @@ jobs:
 
   publish-release:
     name: Publish GitHub Release Binaries
-    needs: compile-executables
+    needs: [test-and-audit, compile-executables]
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     steps:
