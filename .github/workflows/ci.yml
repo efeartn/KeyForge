@@ -22,21 +22,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - os: windows-latest
-            python-version: "3.11"
-          - os: windows-latest
-            python-version: "3.12"
-          - os: windows-latest
-            python-version: "3.13"
-          - os: ubuntu-latest
-            python-version: "3.11"
-          - os: ubuntu-latest
-            python-version: "3.12"
-          - os: ubuntu-latest
-            python-version: "3.13"
-          - os: macos-latest
-            python-version: "3.12"
+        os: [windows-latest, ubuntu-latest]
+        python-version: ["3.11", "3.12", "3.13"]
 
     steps:
       - name: Checkout Repository
@@ -69,7 +56,7 @@ jobs:
           python -m pytest -k "not test_gui_controller_lifecycle" --cov=keyforge --cov-report=term-missing
 
   compile-executables:
-    name: Compile Standalone Binary (${{ matrix.os }})
+    name: Test, Audit & Compile Binary (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -92,10 +79,15 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y python3-tk binutils
 
-      - name: Install PyInstaller & Package Dependencies
+      - name: Install KeyForge, Dev Suite & PyInstaller
         run: |
           python -m pip install --upgrade pip
-          pip install -e . pyinstaller
+          pip install -e ".[dev]" pyinstaller
+
+      - name: Run Cross-Platform Unit & Security Test Suite (${{ matrix.os }})
+        run: |
+          python -m ruff check keyforge tests
+          python -m pytest -k "not test_gui_controller_lifecycle"
 
       - name: Compile Standalone Executable via PyInstaller
         run: |
