@@ -41,13 +41,13 @@ WHEEL_DELTA = 120
 
 MAPVK_VK_TO_VSC = 0
 
-# Portable Win32-equivalent C types so struct layouts can be inspected/tested on any OS
-WORD = ctypes.c_ushort
-DWORD = ctypes.c_ulong
-LONG = ctypes.c_long
-UINT = ctypes.c_uint
-BOOL = ctypes.c_int
-SHORT = ctypes.c_short
+# Portable fixed-width Win32 C types (32-bit DWORD/LONG on both LLP64 Windows and LP64 macOS/Linux)
+WORD = ctypes.c_uint16
+DWORD = ctypes.c_uint32
+LONG = ctypes.c_int32
+UINT = ctypes.c_uint32
+BOOL = ctypes.c_int32
+SHORT = ctypes.c_int16
 ULONG_PTR = ctypes.c_size_t
 
 
@@ -256,7 +256,7 @@ class Win32InputBackend:
 
     def scroll(self, dx: int = 0, dy: int = 0) -> None:
         if dy != 0:
-            wheel_amount = ctypes.c_ulong(dy * WHEEL_DELTA).value
+            wheel_amount = ctypes.c_uint32(dy * WHEEL_DELTA).value
             inp_v = INPUT(
                 type=INPUT_MOUSE,
                 mi=MOUSEINPUT(
@@ -270,7 +270,7 @@ class Win32InputBackend:
             )
             _send_single_input(inp_v)
         if dx != 0:
-            hwheel_amount = ctypes.c_ulong(dx * WHEEL_DELTA).value
+            hwheel_amount = ctypes.c_uint32(dx * WHEEL_DELTA).value
             inp_h = INPUT(
                 type=INPUT_MOUSE,
                 mi=MOUSEINPUT(
