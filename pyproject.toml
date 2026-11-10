@@ -29,6 +29,7 @@ classifiers = [
 ]
 dependencies = [
     "customtkinter>=5.2.0",
+    "pillow>=10.0.0",
 ]
 
 [project.optional-dependencies]
@@ -43,6 +44,9 @@ keyforge = "keyforge.main:main"
 
 [tool.setuptools.packages.find]
 include = ["keyforge*"]
+
+[tool.setuptools.package-data]
+"keyforge.assets" = ["*.png", "*.ico"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

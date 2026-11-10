@@ -7,6 +7,7 @@ import sys
 from datetime import datetime
 from pathlib import Path
 from tkinter import filedialog
+from typing import Any
 
 import customtkinter as ctk
 
@@ -56,6 +57,7 @@ from keyforge.ui.theme import (
     ACCENT_WARNING,
     BG_CARD,
     BG_CARD_ACTIVE,
+    BG_CARD_HOVER,
     BG_ELEVATED,
     BG_INPUT,
     BG_PANEL,
@@ -64,9 +66,13 @@ from keyforge.ui.theme import (
     TEXT_MUTED,
     TEXT_PRIMARY,
     TEXT_SECONDARY,
+    apply_window_icon,
     get_badge_colors,
     get_stripe_color,
+    load_brand_ctk_image,
 )
+
+MAX_UNDO_HISTORY = 40
 
 
 def _platform_badge_label() -> str:
@@ -86,9 +92,10 @@ class KeyForgeApp(ctk.CTk):
         ctk.set_default_color_theme("blue")
 
         self.title(f"KeyForge Studio v{__version__} — FOSS Visual Macro Builder & Auto-Clicker")
-        self.geometry("1280x840")
-        self.minsize(1100, 720)
+        self.geometry("1300x860")
+        self.minsize(1120, 740)
         self.configure(fg_color=BG_ROOT)
+        self.icon_applied: bool = apply_window_icon(self)
 
         # Core State & Engines
         self.presets: dict[str, MacroProfile] = get_builtin_presets()
@@ -104,12 +111,20 @@ class KeyForgeApp(ctk.CTk):
         self._step_row_frames: dict[str, ctk.CTkFrame] = {}
         self._ui_tick_after_id: str | None = None
         self._filter_query: str = ""
+        self._undo_stack: list[list[dict[str, Any]]] = []
+        self._redo_stack: list[list[dict[str, Any]]] = []
 
         # Build Modern Studio Layout
         self._build_top_bar()
         self._build_bento_metrics_strip()
         self._build_quick_forge_bar()
+        self._build_status_bar()
         self._build_main_workspace()
+
+        # Bind Studio Keyboard Shortcuts
+        self.bind("<Control-z>", lambda _e: self.undo_step_change())
+        self.bind("<Control-y>", lambda _e: self.redo_step_change())
+        self.bind("<Control-s>", lambda _e: self.action_save_profile_dialog())
 
         # Initial Render & Audit
         self.refresh_sequence_view()
@@ -138,42 +153,54 @@ class KeyForgeApp(ctk.CTk):
             self,
             fg_color=BG_PANEL,
             corner_radius=0,
-            height=62,
+            height=64,
             border_width=1,
             border_color=BORDER_SUBTLE,
         )
         bar.pack(fill="x", padx=0, pady=0)
 
-        # Brand Logo & Badges
-        title_lbl = ctk.CTkLabel(
-            bar,
-            text="⚡ KEYFORGE",
-            font=ctk.CTkFont(size=21, weight="bold"),
+        # Brand App Icon + Title Stack
+        self._brand_icon_img = load_brand_ctk_image((38, 38))
+        if self._brand_icon_img is not None:
+            icon_lbl = ctk.CTkLabel(bar, text="", image=self._brand_icon_img)
+            icon_lbl.pack(side="left", padx=(18, 8), pady=10)
+        else:
+            ctk.CTkLabel(
+                bar,
+                text="⚡",
+                font=ctk.CTkFont(size=22, weight="bold"),
+                text_color=ACCENT_PRIMARY,
+            ).pack(side="left", padx=(18, 6), pady=10)
+
+        brand_stack = ctk.CTkFrame(bar, fg_color="transparent")
+        brand_stack.pack(side="left", padx=(0, 10), pady=8)
+
+        ctk.CTkLabel(
+            brand_stack,
+            text="KEYFORGE STUDIO",
+            font=ctk.CTkFont(size=18, weight="bold"),
             text_color=TEXT_PRIMARY,
-        )
-        title_lbl.pack(side="left", padx=(20, 8), pady=12)
+            anchor="w",
+        ).pack(anchor="w")
+
+        ctk.CTkLabel(
+            brand_stack,
+            text="Security-Hardened Visual Macro Suite",
+            font=ctk.CTkFont(size=10),
+            text_color=TEXT_SECONDARY,
+            anchor="w",
+        ).pack(anchor="w")
 
         ctk.CTkLabel(
             bar,
-            text=f"v{__version__} FOSS",
-            font=ctk.CTkFont(size=11, weight="bold"),
+            text=f"v{__version__} • {_platform_badge_label()}",
+            font=ctk.CTkFont(size=10, weight="bold"),
             fg_color="#172554",
             text_color="#93C5FD",
             corner_radius=6,
             padx=8,
             pady=2,
-        ).pack(side="left", padx=(0, 6), pady=12)
-
-        ctk.CTkLabel(
-            bar,
-            text=_platform_badge_label(),
-            font=ctk.CTkFont(size=10, weight="bold"),
-            fg_color="#1E293B",
-            text_color=TEXT_SECONDARY,
-            corner_radius=6,
-            padx=8,
-            pady=2,
-        ).pack(side="left", padx=(0, 16), pady=12)
+        ).pack(side="left", padx=(0, 12), pady=12)
 
         # Preset & File Actions
         ctk.CTkLabel(
@@ -181,7 +208,7 @@ class KeyForgeApp(ctk.CTk):
             text="Preset:",
             text_color=TEXT_SECONDARY,
             font=ctk.CTkFont(size=12, weight="bold"),
-        ).pack(side="left", padx=(4, 6))
+        ).pack(side="left", padx=(2, 5))
 
         self.preset_var = ctk.StringVar(value=self.profile.name)
         self.preset_menu = ctk.CTkOptionMenu(
@@ -189,56 +216,56 @@ class KeyForgeApp(ctk.CTk):
             variable=self.preset_var,
             values=list(self.presets.keys()),
             command=self.load_preset,
-            width=250,
-            height=32,
+            width=195,
+            height=30,
             fg_color=BG_CARD,
             button_color=BG_ELEVATED,
         )
-        self.preset_menu.pack(side="left", padx=4)
+        self.preset_menu.pack(side="left", padx=3)
 
         ctk.CTkButton(
             bar,
             text="New",
-            width=62,
-            height=32,
+            width=50,
+            height=30,
             fg_color=BG_CARD,
             hover_color="#28354A",
             command=self.action_new_profile,
-        ).pack(side="left", padx=3)
+        ).pack(side="left", padx=2)
 
         ctk.CTkButton(
             bar,
-            text="Open JSON",
-            width=90,
-            height=32,
+            text="Open",
+            width=58,
+            height=30,
             fg_color=BG_CARD,
             hover_color="#28354A",
             command=self.action_open_profile_dialog,
-        ).pack(side="left", padx=3)
+        ).pack(side="left", padx=2)
 
         ctk.CTkButton(
             bar,
-            text="Save JSON",
-            width=90,
-            height=32,
+            text="Save",
+            width=58,
+            height=30,
             fg_color=ACCENT_PRIMARY,
             hover_color=ACCENT_PRIMARY_HOVER,
             font=ctk.CTkFont(size=12, weight="bold"),
             command=self.action_save_profile_dialog,
-        ).pack(side="left", padx=3)
+        ).pack(side="left", padx=2)
 
         # Emergency Panic Button in Top Bar
         self.top_panic_btn = ctk.CTkButton(
             bar,
-            text=f"⚠ PANIC KILL-SWITCH ({self.profile.panic_hotkey})",
+            text=f"⚠ PANIC STOP ({self.profile.panic_hotkey})",
             fg_color=ACCENT_DANGER,
             hover_color=ACCENT_DANGER_HOVER,
             font=ctk.CTkFont(size=12, weight="bold"),
-            height=34,
-            width=185,
+            height=32,
+            width=156,
             command=self.trigger_panic_stop,
         )
-        self.top_panic_btn.pack(side="right", padx=(10, 20), pady=12)
+        self.top_panic_btn.pack(side="right", padx=(8, 16), pady=12)
 
         # Security Audit Status Pill
         self.audit_badge = ctk.CTkLabel(
@@ -248,10 +275,10 @@ class KeyForgeApp(ctk.CTk):
             fg_color="#064E3B",
             text_color="#6EE7B7",
             corner_radius=6,
-            padx=12,
-            pady=5,
+            padx=10,
+            pady=4,
         )
-        self.audit_badge.pack(side="right", padx=6, pady=12)
+        self.audit_badge.pack(side="right", padx=4, pady=12)
 
     def _build_bento_metrics_strip(self) -> None:
         """Build the 4-card Bento KPI Telemetry strip below the header."""
@@ -415,6 +442,7 @@ class KeyForgeApp(ctk.CTk):
         )
         self.dsl_entry.pack(side="left", fill="x", expand=True, padx=6)
         self.dsl_entry.insert(0, format_actions_to_dsl(self.profile.actions))
+        self.dsl_entry.bind("<Return>", lambda _e: self.apply_quick_expression(append=False))
 
         ctk.CTkButton(
             top_row,
@@ -477,6 +505,33 @@ class KeyForgeApp(ctk.CTk):
                 command=lambda e=expr: self._apply_template_chip(e),
             ).pack(side="left", padx=3)
 
+    def _build_status_bar(self) -> None:
+        """Build the docked bottom Studio Status & Keyboard Shortcuts Bar."""
+        sbar = ctk.CTkFrame(
+            self,
+            fg_color=BG_PANEL,
+            corner_radius=0,
+            height=28,
+            border_width=1,
+            border_color=BORDER_SUBTLE,
+        )
+        sbar.pack(side="bottom", fill="x", padx=0, pady=0)
+
+        self.footer_status_lbl = ctk.CTkLabel(
+            sbar,
+            text=f"● Ready — KeyForge Studio v{__version__}",
+            font=ctk.CTkFont(size=11),
+            text_color=TEXT_SECONDARY,
+        )
+        self.footer_status_lbl.pack(side="left", padx=16, pady=3)
+
+        ctk.CTkLabel(
+            sbar,
+            text="Shortcuts: Ctrl+Z Undo  •  Ctrl+Y Redo  •  Ctrl+S Save  •  Double-Click Step to Edit",
+            font=ctk.CTkFont(size=11),
+            text_color=TEXT_MUTED,
+        ).pack(side="right", padx=16, pady=3)
+
     def _apply_template_chip(self, expression: str) -> None:
         self.dsl_entry.delete(0, "end")
         self.dsl_entry.insert(0, expression)
@@ -490,7 +545,7 @@ class KeyForgeApp(ctk.CTk):
 
     def _build_main_workspace(self) -> None:
         workspace = ctk.CTkFrame(self, fg_color="transparent")
-        workspace.pack(fill="both", expand=True, padx=16, pady=(2, 14))
+        workspace.pack(fill="both", expand=True, padx=16, pady=(2, 10))
         workspace.grid_columnconfigure(0, weight=7)
         workspace.grid_columnconfigure(1, weight=5)
         workspace.grid_rowconfigure(0, weight=1)
@@ -522,7 +577,7 @@ class KeyForgeApp(ctk.CTk):
         )
         self.step_count_lbl.pack(side="right")
 
-        # Filter & Bulk Operations Sub-Bar
+        # Filter, Undo/Redo, Speed Scaling & Bulk Operations Sub-Bar
         filter_bar = ctk.CTkFrame(left_panel, fg_color="transparent")
         filter_bar.pack(fill="x", padx=14, pady=(0, 4))
 
@@ -531,16 +586,63 @@ class KeyForgeApp(ctk.CTk):
             placeholder_text="🔍 Filter steps by key, type, or comment...",
             fg_color=BG_INPUT,
             height=28,
-            width=260,
+            width=210,
             font=ctk.CTkFont(size=12),
         )
         self.filter_entry.pack(side="left", padx=(2, 6))
         self.filter_entry.bind("<KeyRelease>", self._on_filter_changed)
 
+        self.undo_btn = ctk.CTkButton(
+            filter_bar,
+            text="↶ Undo",
+            width=58,
+            height=26,
+            fg_color=BG_CARD,
+            hover_color="#28354A",
+            font=ctk.CTkFont(size=11),
+            command=self.undo_step_change,
+        )
+        self.undo_btn.pack(side="left", padx=2)
+
+        self.redo_btn = ctk.CTkButton(
+            filter_bar,
+            text="↷ Redo",
+            width=58,
+            height=26,
+            fg_color=BG_CARD,
+            hover_color="#28354A",
+            font=ctk.CTkFont(size=11),
+            command=self.redo_step_change,
+        )
+        self.redo_btn.pack(side="left", padx=2)
+
+        ctk.CTkButton(
+            filter_bar,
+            text="⚡ 2x Faster",
+            width=74,
+            height=26,
+            fg_color="#172554",
+            hover_color="#1D4ED8",
+            text_color="#93C5FD",
+            font=ctk.CTkFont(size=11, weight="bold"),
+            command=lambda: self.scale_wait_times(0.5),
+        ).pack(side="left", padx=2)
+
+        ctk.CTkButton(
+            filter_bar,
+            text="🐢 0.5x Slower",
+            width=82,
+            height=26,
+            fg_color=BG_CARD,
+            hover_color="#28354A",
+            font=ctk.CTkFont(size=11),
+            command=lambda: self.scale_wait_times(2.0),
+        ).pack(side="left", padx=2)
+
         ctk.CTkButton(
             filter_bar,
             text="Enable All",
-            width=76,
+            width=68,
             height=26,
             fg_color=BG_CARD,
             hover_color="#28354A",
@@ -551,7 +653,7 @@ class KeyForgeApp(ctk.CTk):
         ctk.CTkButton(
             filter_bar,
             text="Disable All",
-            width=76,
+            width=68,
             height=26,
             fg_color=BG_CARD,
             hover_color="#28354A",
@@ -562,7 +664,7 @@ class KeyForgeApp(ctk.CTk):
         ctk.CTkButton(
             filter_bar,
             text="Reverse",
-            width=66,
+            width=60,
             height=26,
             fg_color=BG_CARD,
             hover_color="#28354A",
@@ -914,19 +1016,74 @@ class KeyForgeApp(ctk.CTk):
         self.console_box.pack(fill="both", expand=True, padx=6, pady=(4, 6))
 
     # -------------------------------------------------------------------------
-    # Sequence Builder Operations
+    # Undo / Redo & Sequence Builder Operations
     # -------------------------------------------------------------------------
+
+    def _snapshot_actions(self) -> list[dict[str, Any]]:
+        return [act.to_dict() for act in self.profile.actions]
+
+    def _record_undo_snapshot(self) -> None:
+        self._undo_stack.append(self._snapshot_actions())
+        if len(self._undo_stack) > MAX_UNDO_HISTORY:
+            self._undo_stack.pop(0)
+        self._redo_stack.clear()
+
+    def undo_step_change(self) -> bool:
+        if not self._undo_stack:
+            self._log_event("Undo history is empty.")
+            return False
+        self._redo_stack.append(self._snapshot_actions())
+        prev_state = self._undo_stack.pop()
+        self.profile.actions = [MacroAction.from_dict(d) for d in prev_state]
+        self._on_sequence_mutated()
+        self._log_event(f"Undid last change ({len(self.profile.actions)} steps active).")
+        return True
+
+    def redo_step_change(self) -> bool:
+        if not self._redo_stack:
+            self._log_event("Redo history is empty.")
+            return False
+        self._undo_stack.append(self._snapshot_actions())
+        next_state = self._redo_stack.pop()
+        self.profile.actions = [MacroAction.from_dict(d) for d in next_state]
+        self._on_sequence_mutated()
+        self._log_event(f"Redid change ({len(self.profile.actions)} steps active).")
+        return True
+
+    def scale_wait_times(self, factor: float) -> None:
+        """Scale all Wait step durations (and jitter) by factor (e.g. 0.5 for 2x speed, 2.0 for 0.5x speed)."""
+        if not self.profile.actions:
+            return
+        self._record_undo_snapshot()
+
+        def _scale_list(actions: list[MacroAction]) -> int:
+            scaled = 0
+            for act in actions:
+                if act.action_type == ActionType.WAIT:
+                    act.wait_ms = max(5, min(3_600_000, int(round(act.wait_ms * factor))))
+                    act.jitter_ms = max(0, min(60_000, int(round(act.jitter_ms * factor))))
+                    scaled += 1
+                elif act.action_type == ActionType.REPEAT_BLOCK:
+                    scaled += _scale_list(act.sub_actions)
+            return scaled
+
+        count = _scale_list(self.profile.actions)
+        self._on_sequence_mutated()
+        speed_desc = "2x faster" if factor < 1.0 else "0.5x slower"
+        self._log_event(f"Scaled {count} wait step(s) ({speed_desc}).")
 
     def _on_filter_changed(self, _event: object = None) -> None:
         self._filter_query = self.filter_entry.get().strip().lower()
         self.refresh_sequence_view()
 
     def set_all_steps_enabled(self, enabled: bool) -> None:
+        self._record_undo_snapshot()
         for act in self.profile.actions:
             act.enabled = enabled
         self._on_sequence_mutated()
 
     def reverse_steps(self) -> None:
+        self._record_undo_snapshot()
         self.profile.actions.reverse()
         self._on_sequence_mutated()
         self._log_event("Reversed step sequence order.")
@@ -954,6 +1111,23 @@ class KeyForgeApp(ctk.CTk):
         if act.action_type == ActionType.REPEAT_BLOCK:
             return f"{len(act.sub_actions)} nested inner step(s) × {act.repeat_count} iterations"
         return ""
+
+    @staticmethod
+    def _step_metric_pill(act: MacroAction) -> str:
+        """Return compact monospace metric pill text for right-column alignment."""
+        if act.action_type == ActionType.WAIT:
+            return f"{act.wait_ms}ms ±{act.jitter_ms}" if act.jitter_ms > 0 else f"{act.wait_ms}ms"
+        if act.action_type == ActionType.KEY_PRESS:
+            return f"{act.hold_ms}ms tap"
+        if act.action_type == ActionType.MOUSE_CLICK:
+            return f"({act.x},{act.y})" if act.x is not None else "Cursor"
+        if act.action_type == ActionType.MOUSE_MOVE:
+            return f"({act.x},{act.y})"
+        if act.action_type == ActionType.MOUSE_SCROLL:
+            return f"dY {act.scroll_dy:+d}"
+        if act.action_type == ActionType.REPEAT_BLOCK:
+            return f"{act.repeat_count}× loop"
+        return "State"
 
     def refresh_sequence_view(self) -> None:
         """Rebuild the modern timeline step cards in the sequence scroll container."""
@@ -996,22 +1170,23 @@ class KeyForgeApp(ctk.CTk):
                 border_width=1,
                 border_color=BORDER_SUBTLE,
             )
+            row.pack_propagate(False)
             row.pack(fill="x", pady=3, padx=2)
             self._step_row_frames[act.id] = row
 
             # Colored Left Accent Stripe
             stripe_color = get_stripe_color(act.action_type)
-            stripe = ctk.CTkFrame(row, fg_color=stripe_color, width=5, corner_radius=4)
-            stripe.pack(side="left", fill="y", padx=(0, 6), pady=2)
+            stripe = ctk.CTkFrame(row, fg_color=stripe_color, width=5, height=42, corner_radius=3)
+            stripe.pack(side="left", fill="y", padx=(2, 6), pady=4)
 
             # Step Index Pill
             ctk.CTkLabel(
                 row,
                 text=f"#{idx + 1:02d}",
-                width=36,
+                width=34,
                 font=ctk.CTkFont(family="Consolas", size=12, weight="bold"),
                 text_color=TEXT_SECONDARY,
-            ).pack(side="left", padx=(2, 2), pady=8)
+            ).pack(side="left", padx=(2, 2))
 
             # Enable Toggle
             en_var = ctk.BooleanVar(value=act.enabled)
@@ -1033,32 +1208,44 @@ class KeyForgeApp(ctk.CTk):
                 fg_color=badge_bg,
                 text_color=badge_fg,
                 corner_radius=6,
-                width=64,
+                width=62,
+                height=24,
                 font=ctk.CTkFont(size=11, weight="bold"),
-            ).pack(side="left", padx=6, pady=8)
+            ).pack(side="left", padx=6)
 
             # Primary Title + Secondary Subtitle Stack
-            text_col = ctk.CTkFrame(row, fg_color="transparent")
+            text_col = ctk.CTkFrame(row, fg_color="transparent", height=40)
             text_col.pack(side="left", fill="x", expand=True, padx=6, pady=4)
 
             desc_color = TEXT_PRIMARY if act.enabled else TEXT_MUTED
-            ctk.CTkLabel(
+            title_lbl = ctk.CTkLabel(
                 text_col,
                 text=act.describe(),
                 text_color=desc_color,
+                height=18,
                 font=ctk.CTkFont(size=13, weight="bold"),
                 anchor="w",
-            ).pack(fill="x", anchor="w")
+            )
+            title_lbl.pack(fill="x", anchor="w")
 
             sub_text = self._step_subtitle(act)
             if sub_text:
-                ctk.CTkLabel(
+                sub_lbl = ctk.CTkLabel(
                     text_col,
                     text=sub_text,
                     text_color=TEXT_SECONDARY,
+                    height=14,
                     font=ctk.CTkFont(size=10),
                     anchor="w",
-                ).pack(fill="x", anchor="w")
+                )
+                sub_lbl.pack(fill="x", anchor="w")
+                sub_lbl.bind("<Double-Button-1>", lambda _e, i=idx: self.open_edit_step_dialog(i))
+
+            # Bind hover & double-click edit on step row
+            row.bind("<Enter>", lambda _e, r=row, aid=act.id: self._on_row_hover(r, aid, True))
+            row.bind("<Leave>", lambda _e, r=row, aid=act.id: self._on_row_hover(r, aid, False))
+            row.bind("<Double-Button-1>", lambda _e, i=idx: self.open_edit_step_dialog(i))
+            title_lbl.bind("<Double-Button-1>", lambda _e, i=idx: self.open_edit_step_dialog(i))
 
             # Row Controls (Delete, Duplicate, Edit, Down, Up)
             ctk.CTkButton(
@@ -1111,6 +1298,24 @@ class KeyForgeApp(ctk.CTk):
                 command=lambda i=idx: self.move_step_up(i),
             ).pack(side="right", padx=2)
 
+            # Right-aligned Monospace Metric Pill
+            ctk.CTkLabel(
+                row,
+                text=self._step_metric_pill(act),
+                font=ctk.CTkFont(family="Consolas", size=11),
+                fg_color=BG_INPUT,
+                text_color=TEXT_SECONDARY,
+                corner_radius=5,
+                padx=8,
+                pady=2,
+            ).pack(side="right", padx=(4, 6))
+
+    def _on_row_hover(self, row: ctk.CTkFrame, action_id: str, entering: bool) -> None:
+        if action_id == self._active_step_id:
+            row.configure(fg_color=BG_CARD_ACTIVE)
+        else:
+            row.configure(fg_color=BG_CARD_HOVER if entering else BG_CARD)
+
     def _sync_dsl_entry_from_steps(self) -> None:
         self.dsl_entry.delete(0, "end")
         self.dsl_entry.insert(0, format_actions_to_dsl(self.profile.actions))
@@ -1121,22 +1326,26 @@ class KeyForgeApp(ctk.CTk):
         self.run_security_audit()
 
     def _on_toggle_step_enabled(self, action: MacroAction, enabled: bool) -> None:
+        self._record_undo_snapshot()
         action.enabled = enabled
         self._on_sequence_mutated()
 
     def add_step(self, action: MacroAction) -> None:
+        self._record_undo_snapshot()
         self.profile.actions.append(action)
         self._on_sequence_mutated()
         self._log_event(f"Added step: {action.describe()}")
 
     def delete_step(self, index: int) -> None:
         if 0 <= index < len(self.profile.actions):
+            self._record_undo_snapshot()
             removed = self.profile.actions.pop(index)
             self._on_sequence_mutated()
             self._log_event(f"Deleted step #{index + 1}: {removed.describe()}")
 
     def duplicate_step(self, index: int) -> None:
         if 0 <= index < len(self.profile.actions):
+            self._record_undo_snapshot()
             cloned = self.profile.actions[index].clone()
             self.profile.actions.insert(index + 1, cloned)
             self._on_sequence_mutated()
@@ -1144,12 +1353,14 @@ class KeyForgeApp(ctk.CTk):
 
     def move_step_up(self, index: int) -> None:
         if 0 < index < len(self.profile.actions):
+            self._record_undo_snapshot()
             acts = self.profile.actions
             acts[index - 1], acts[index] = acts[index], acts[index - 1]
             self._on_sequence_mutated()
 
     def move_step_down(self, index: int) -> None:
         if 0 <= index < len(self.profile.actions) - 1:
+            self._record_undo_snapshot()
             acts = self.profile.actions
             acts[index + 1], acts[index] = acts[index], acts[index + 1]
             self._on_sequence_mutated()
@@ -1157,6 +1368,7 @@ class KeyForgeApp(ctk.CTk):
     def clear_all_steps(self) -> None:
         if self.executor.is_running:
             self.executor.stop()
+        self._record_undo_snapshot()
         self.profile.actions.clear()
         self._on_sequence_mutated()
         self._log_event("Cleared all steps from sequence.")
@@ -1170,6 +1382,7 @@ class KeyForgeApp(ctk.CTk):
         current = self.profile.actions[index]
 
         def _save_edited(updated: MacroAction) -> None:
+            self._record_undo_snapshot()
             self.profile.actions[index] = updated
             self._on_sequence_mutated()
             self._log_event(f"Updated step #{index + 1}: {updated.describe()}")
@@ -1181,6 +1394,7 @@ class KeyForgeApp(ctk.CTk):
         expr = self.dsl_entry.get().strip()
         try:
             parsed_steps = parse_quick_expression(expr)
+            self._record_undo_snapshot()
             if append:
                 self.profile.actions.extend(parsed_steps)
             else:
@@ -1301,6 +1515,7 @@ class KeyForgeApp(ctk.CTk):
                 fg_color="#991B1B",
             )
             if recorded:
+                self._record_undo_snapshot()
                 self.profile.actions = recorded
                 self._on_sequence_mutated()
                 self._log_event(f"Live Recording complete: captured {len(recorded)} step(s).")
@@ -1332,6 +1547,7 @@ class KeyForgeApp(ctk.CTk):
         preset = self.presets.get(preset_name)
         if preset is None:
             return
+        self._record_undo_snapshot()
         self.profile = MacroProfile.from_payload_dict(preset.to_payload_dict())
         self.sync_profile_settings_to_ui()
         self._on_sequence_mutated()
@@ -1340,6 +1556,7 @@ class KeyForgeApp(ctk.CTk):
     def action_new_profile(self) -> None:
         if self.executor.is_running:
             self.executor.stop()
+        self._record_undo_snapshot()
         self.profile = MacroProfile(
             name="Custom Macro Profile",
             description="Created in KeyForge Studio",
@@ -1362,6 +1579,7 @@ class KeyForgeApp(ctk.CTk):
         if self.executor.is_running:
             self.executor.stop()
         loaded_profile, sig_verified = load_profile_secure(path, require_signature=False)
+        self._record_undo_snapshot()
         self.profile = loaded_profile
         self.sync_profile_settings_to_ui()
         self._rebind_hotkeys()
@@ -1531,6 +1749,8 @@ class KeyForgeApp(ctk.CTk):
         line = f"[{ts}] {message}\n"
         self.console_box.insert("end", line)
         self.console_box.see("end")
+        if hasattr(self, "footer_status_lbl"):
+            self.footer_status_lbl.configure(text=f"● [{ts}] {message}")
 
     def _on_close(self) -> None:
         if self._ui_tick_after_id is not None:

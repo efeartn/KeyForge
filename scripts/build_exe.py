@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import os
 import platform
 import subprocess
 import sys
@@ -23,8 +24,15 @@ def get_binary_name() -> str:
 def build_executable() -> int:
     root = Path(__file__).resolve().parent.parent
     entry = root / "keyforge" / "main.py"
+    assets_dir = root / "keyforge" / "assets"
+    icon_ico = assets_dir / "icon.ico"
+    icon_png = assets_dir / "icon.png"
     dist_dir = root / "dist"
     bin_name = get_binary_name()
+
+    sep = ";" if os.name == "nt" else ":"
+    add_data_arg = f"{assets_dir}{sep}keyforge/assets"
+    icon_file = icon_ico if sys.platform == "win32" else icon_png
 
     cmd = [
         sys.executable,
@@ -37,10 +45,15 @@ def build_executable() -> int:
         bin_name,
         "--collect-all",
         "customtkinter",
-        str(entry),
+        "--add-data",
+        add_data_arg,
     ]
+    if icon_file.exists():
+        cmd.extend(["--icon", str(icon_file)])
+    cmd.append(str(entry))
+
     print("Running PyInstaller:", " ".join(cmd))
-    rc = subprocess.call(cmd, cwd=str(root))
+    rc = subprocess.call(cmd, cwd=str(root))  # noqa: S603
     if rc != 0:
         return rc
 

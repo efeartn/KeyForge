@@ -28,6 +28,7 @@ from keyforge.ui.theme import (
     BORDER_SUBTLE,
     TEXT_PRIMARY,
     TEXT_SECONDARY,
+    apply_window_icon,
 )
 
 
@@ -45,6 +46,7 @@ class StepEditorDialog(ctk.CTkToplevel):
         self.geometry("520x540")
         self.resizable(False, False)
         self.configure(fg_color=BG_PANEL)
+        apply_window_icon(self)
 
         self._initial = initial_action
         self._on_save = on_save
@@ -53,6 +55,9 @@ class StepEditorDialog(ctk.CTkToplevel):
         self.transient(master)
         with contextlib.suppress(Exception):
             self.grab_set()
+
+        self.bind("<Escape>", lambda _e: self.destroy())
+        self.bind("<Return>", lambda _e: self._on_submit())
 
         self._build_ui()
         if initial_action is not None:

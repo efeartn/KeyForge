@@ -4,8 +4,25 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from PIL import Image
+
+from keyforge.assets import get_icon_ico_path, get_icon_png_path
 from keyforge.main import main
 from keyforge.models.action import make_wait
+
+
+def test_bundled_app_icon_assets() -> None:
+    png_path = get_icon_png_path()
+    ico_path = get_icon_ico_path()
+    assert png_path.exists()
+    assert ico_path.exists()
+
+    with Image.open(png_path) as png_img:
+        assert png_img.size == (512, 512)
+        assert png_img.mode == "RGBA"
+
+    with Image.open(ico_path) as ico_img:
+        assert ico_img.format == "ICO"
 
 
 def test_cli_export_audit_and_dry_run(tmp_path: Path) -> None:
@@ -94,14 +111,23 @@ def test_gui_controller_lifecycle(tmp_path: Path) -> None:
         dlg._on_submit()
         assert len(saved_from_dialog) == 1
 
-        # Test new Studio UI features: template chips, filter, bulk enable/disable, reverse
+        # Test new Studio UI features: template chips, filter, bulk enable/disable, reverse, undo/redo, tempo scaling
+        assert app.icon_applied is True
         app._apply_template_chip("Press E -> Wait 200ms -> Click -> Press 1")
         assert len(app.profile.actions) == 4
+        app.scale_wait_times(0.5)
+        assert app.profile.actions[1].wait_ms == 100
+        app.scale_wait_times(2.0)
+        assert app.profile.actions[1].wait_ms == 200
         app.set_all_steps_enabled(False)
         assert all(not a.enabled for a in app.profile.actions)
         app.set_all_steps_enabled(True)
         assert all(a.enabled for a in app.profile.actions)
         app.reverse_steps()
+        assert app.profile.actions[0].key == "1"
+        assert app.undo_step_change() is True
+        assert app.profile.actions[0].key == "E"
+        assert app.redo_step_change() is True
         assert app.profile.actions[0].key == "1"
         app.filter_entry.insert(0, "Wait")
         app._on_filter_changed()

@@ -1,7 +1,17 @@
-"""Modern Obsidian & Neon Studio color palette, badge styles, and typography for KeyForge UI."""
+"""Modern Obsidian & Neon Studio color palette, badge styles, and icon utilities for KeyForge UI."""
 
 from __future__ import annotations
 
+import contextlib
+import ctypes
+import sys
+import tkinter as tk
+from typing import Any
+
+import customtkinter as ctk
+from PIL import Image
+
+from keyforge.assets import get_icon_ico_path, get_icon_png_path
 from keyforge.models.action import ActionType
 
 # Core Obsidian & Slate Surface Hierarchy
@@ -57,3 +67,46 @@ def get_stripe_color(action_type: ActionType) -> str:
     """Return the left accent stripe hex color for an ActionType."""
     _, _, stripe = ACTION_VISUAL_STYLE.get(action_type, ("#1E293B", "#E2E8F0", "#3B82F6"))
     return stripe
+
+
+def apply_window_icon(window: Any) -> bool:
+    """Apply the bundled KeyForge application icon to a Tk / CTk window across Windows, macOS, and Linux."""
+    applied = False
+    if sys.platform == "win32":
+        with contextlib.suppress(Exception):
+            ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("KeyForge.Studio.App.1")
+
+    ico_path = get_icon_ico_path()
+    png_path = get_icon_png_path()
+
+    if png_path.exists():
+        with contextlib.suppress(Exception):
+            photo = tk.PhotoImage(master=window, file=str(png_path))
+            window._kf_icon_photo_ref = photo
+            window.wm_iconphoto(True, photo)
+            applied = True
+
+    if sys.platform == "win32" and ico_path.exists():
+        with contextlib.suppress(Exception):
+            window.iconbitmap(default=str(ico_path))
+            window.after(150, lambda: _safe_set_iconbitmap(window, str(ico_path)))
+            applied = True
+
+    return applied
+
+
+def _safe_set_iconbitmap(window: Any, ico_str: str) -> None:
+    with contextlib.suppress(Exception):
+        if window.winfo_exists():
+            window.iconbitmap(ico_str)
+
+
+def load_brand_ctk_image(size: tuple[int, int] = (36, 36)) -> ctk.CTkImage | None:
+    """Load the bundled KeyForge icon as a high-DPI CTkImage for header embedding."""
+    png_path = get_icon_png_path()
+    if not png_path.exists():
+        return None
+    with contextlib.suppress(Exception):
+        pil_img = Image.open(png_path)
+        return ctk.CTkImage(light_image=pil_img, dark_image=pil_img, size=size)
+    return None
