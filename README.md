@@ -11,7 +11,7 @@
 [![Platform: Windows | macOS | Linux](https://img.shields.io/badge/Platform-Windows%20%7C%20macOS%20%7C%20Linux-0EA5E9)](https://github.com/efeartn/KeyForge/releases/latest)
 [![Python: 3.10+](https://img.shields.io/badge/Python-3.10%20%7C%203.11%20%7C%203.12%20%7C%203.13-3776AB)](pyproject.toml)
 [![Security: SHA-256 Signed + Static Auditor](https://img.shields.io/badge/Security-SHA--256%20Signed%20%2B%20Static%20Auditor-10B981)](SECURITY.md)
-[![License: MIT](https://img.shields.io/badge/License-MIT-8B5CF6.svg)](LICENSE)
+[![License: GPL-3.0](https://img.shields.io/badge/License-GPL--3.0-8B5CF6.svg)](LICENSE)
 
 [**Download Standalone Binaries**](https://github.com/efeartn/KeyForge/releases/latest) • [**Quick-Forge DSL Guide**](#quick-forge-recipe-dsl-reference) • [**Cybersecurity Architecture**](#cybersecurity--safety-engineering) • [**CLI Reference**](#command-line-interface-cli)
 
@@ -39,7 +39,7 @@ Until now, users were forced to choose between three flawed options:
 
 | Feature / Guarantee | **KeyForge Studio (FOSS)** | **TinyTask (Abandoned)** | **AutoHotkey (Scripting)** | **Paid Macro Trialware** |
 | :--- | :---: | :---: | :---: | :---: |
-| **100% Free & Open Source (MIT)** | ✅ Yes | ❌ Closed binary | ✅ Yes | ❌ Trial timers / Paywalls |
+| **100% Free & Open Source (GPL-3.0)** | ✅ Yes | ❌ Closed binary | ✅ Yes | ❌ Trial timers / Paywalls |
 | **Visual Step-by-Step Timeline Editor** | ✅ Full CRUD + Undo/Redo | ❌ Record-only blob | ❌ Code editor only | ⚠️ Often locked behind Pro |
 | **Human-Readable One-Line Recipe Bar** | ✅ `Press E -> Wait 200ms -> Click` | ❌ No | ❌ Requires custom script | ❌ No |
 | **Humanized Random Jitter (`±ms`)** | ✅ Built into every Wait step | ❌ Robotic fixed timing | ⚠️ Manual `Random()` code | ❌ Rare |
@@ -216,5 +216,5 @@ python -m ruff format --check keyforge tests scripts
 
 ## License & Security Policy
 
-- **License**: Distributed under the [**MIT License**](LICENSE).
+- **License**: Distributed under the [**GNU General Public License v3.0**](LICENSE).
 - **Security Policy**: See [**SECURITY.md**](SECURITY.md) for threat model details and vulnerability reporting guidelines.
