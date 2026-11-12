@@ -177,7 +177,7 @@ class KeyForgeApp(ctk.CTk):
 
         ctk.CTkLabel(
             brand_stack,
-            text="KEYFORGE STUDIO",
+            text="KeyForge Studio",
             font=ctk.CTkFont(size=18, weight="bold"),
             text_color=TEXT_PRIMARY,
             anchor="w",
@@ -185,8 +185,8 @@ class KeyForgeApp(ctk.CTk):
 
         ctk.CTkLabel(
             brand_stack,
-            text="Security-Hardened Visual Macro Suite",
-            font=ctk.CTkFont(size=10),
+            text="Visual Macro Studio & Auto-Clicker",
+            font=ctk.CTkFont(size=11),
             text_color=TEXT_SECONDARY,
             anchor="w",
         ).pack(anchor="w")
@@ -195,8 +195,8 @@ class KeyForgeApp(ctk.CTk):
             bar,
             text=f"v{__version__} • {_platform_badge_label()}",
             font=ctk.CTkFont(size=10, weight="bold"),
-            fg_color="#172554",
-            text_color="#93C5FD",
+            fg_color="#13233F",
+            text_color="#82B4FF",
             corner_radius=6,
             padx=8,
             pady=2,
@@ -1616,11 +1616,11 @@ class KeyForgeApp(ctk.CTk):
         report = audit_profile(self.profile)
         summary = f"🛡 {report.badge_summary()}"
         if report.has_critical:
-            self.audit_badge.configure(text=summary, fg_color="#7F1D1D", text_color="#FCA5A5")
+            self.audit_badge.configure(text=summary, fg_color="#3D1414", text_color="#FF9E99")
         elif report.has_warnings:
-            self.audit_badge.configure(text=summary, fg_color="#78350F", text_color="#FCD34D")
+            self.audit_badge.configure(text=summary, fg_color="#33210C", text_color="#FDE68A")
         else:
-            self.audit_badge.configure(text=summary, fg_color="#064E3B", text_color="#6EE7B7")
+            self.audit_badge.configure(text=summary, fg_color="#102C1E", text_color="#7EE7A6")
 
         # Update Security Inspector Tab
         with contextlib.suppress(Exception):

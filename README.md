@@ -22,7 +22,7 @@
 ## Live Studio Preview
 
 <div align="center">
-  <img src="keyforge/assets/studio_screenshot.png" alt="KeyForge Studio v1.0.0 Desktop Interface" width="100%" />
+  <img src="keyforge/assets/studio_screenshot.png" alt="KeyForge Studio v1.1.0 Desktop Interface" width="100%" />
 </div>
 
 ---

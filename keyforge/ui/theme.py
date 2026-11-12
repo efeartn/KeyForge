@@ -1,4 +1,4 @@
-"""Modern Obsidian & Neon Studio color palette, badge styles, and icon utilities for KeyForge UI."""
+"""Minimalist Apple-inspired design language, color palette, badge styles, and icon utilities for KeyForge."""
 
 from __future__ import annotations
 
@@ -14,46 +14,46 @@ from PIL import Image
 from keyforge.assets import get_icon_ico_path, get_icon_png_path
 from keyforge.models.action import ActionType
 
-# Core Obsidian & Slate Surface Hierarchy
-BG_ROOT = "#070A10"
-BG_PANEL = "#0F1521"
-BG_ELEVATED = "#141C2B"
-BG_CARD = "#172033"
-BG_CARD_HOVER = "#1E2942"
-BG_CARD_ACTIVE = "#1E3A5F"
-BG_INPUT = "#0A0E17"
+# Apple macOS / Human Interface Guidelines Surface Hierarchy (Space Black & Dark Titanium)
+BG_ROOT = "#0C0E12"
+BG_PANEL = "#15181F"
+BG_ELEVATED = "#1B1F28"
+BG_CARD = "#191D26"
+BG_CARD_HOVER = "#222733"
+BG_CARD_ACTIVE = "#162C4E"
+BG_INPUT = "#0E1116"
 
-BORDER_SUBTLE = "#223049"
-BORDER_FOCUS = "#3B82F6"
+BORDER_SUBTLE = "#262C38"
+BORDER_FOCUS = "#0A84FF"
 
-# Typography Hierarchy
-TEXT_PRIMARY = "#F8FAFC"
-TEXT_SECONDARY = "#94A3B8"
-TEXT_MUTED = "#64748B"
+# Typography Hierarchy (Crisp High-Legibility)
+TEXT_PRIMARY = "#FFFFFF"
+TEXT_SECONDARY = "#98A2B3"
+TEXT_MUTED = "#667085"
 
-# Semantic & Brand Accents
-ACCENT_PRIMARY = "#3B82F6"
-ACCENT_PRIMARY_HOVER = "#2563EB"
-ACCENT_SUCCESS = "#10B981"
-ACCENT_SUCCESS_HOVER = "#059669"
-ACCENT_WARNING = "#F59E0B"
-ACCENT_WARNING_HOVER = "#D97706"
-ACCENT_DANGER = "#EF4444"
-ACCENT_DANGER_HOVER = "#DC2626"
-ACCENT_PURPLE = "#8B5CF6"
-ACCENT_PURPLE_HOVER = "#7C3AED"
-ACCENT_CYAN = "#06B6D4"
+# Semantic Accents (Apple System Colors)
+ACCENT_PRIMARY = "#0A84FF"  # Apple Blue
+ACCENT_PRIMARY_HOVER = "#0071E3"
+ACCENT_SUCCESS = "#30D158"  # Apple Green
+ACCENT_SUCCESS_HOVER = "#24A143"
+ACCENT_WARNING = "#FF9F0A"  # Apple Orange
+ACCENT_WARNING_HOVER = "#D98200"
+ACCENT_DANGER = "#FF453A"  # Apple Red
+ACCENT_DANGER_HOVER = "#D93025"
+ACCENT_PURPLE = "#BF5AF2"  # Apple Purple
+ACCENT_PURPLE_HOVER = "#9F37D6"
+ACCENT_CYAN = "#64D2FF"  # Apple Teal/Cyan
 
 # Per-Action Type Visual Identity: (badge_bg, badge_fg, stripe_accent)
 ACTION_VISUAL_STYLE: dict[ActionType, tuple[str, str, str]] = {
-    ActionType.KEY_PRESS: ("#172554", "#93C5FD", "#3B82F6"),  # Electric Blue
-    ActionType.KEY_DOWN: ("#1E3A8A", "#BFDBFE", "#60A5FA"),  # Ice Blue
-    ActionType.KEY_UP: ("#1E293B", "#CBD5E1", "#94A3B8"),  # Slate Silver
-    ActionType.MOUSE_CLICK: ("#064E3B", "#6EE7B7", "#10B981"),  # Emerald Mint
-    ActionType.MOUSE_MOVE: ("#164E63", "#67E8F9", "#06B6D4"),  # Cyber Cyan
-    ActionType.MOUSE_SCROLL: ("#3B0764", "#D8B4FE", "#A855F7"),  # Neon Violet
-    ActionType.WAIT: ("#78350F", "#FCD34D", "#F59E0B"),  # Amber Gold
-    ActionType.REPEAT_BLOCK: ("#701A75", "#F0ABFC", "#EC4899"),  # Fuchsia Loop
+    ActionType.KEY_PRESS: ("#13233F", "#82B4FF", "#0A84FF"),  # System Blue
+    ActionType.KEY_DOWN: ("#182F52", "#A8CBFF", "#5AC8FA"),  # Sky Blue
+    ActionType.KEY_UP: ("#1C212A", "#D0D5DD", "#98A2B3"),  # Slate Titanium
+    ActionType.MOUSE_CLICK: ("#102C1E", "#7EE7A6", "#30D158"),  # Mint Green
+    ActionType.MOUSE_MOVE: ("#112938", "#7DD3FC", "#64D2FF"),  # Teal Cyan
+    ActionType.MOUSE_SCROLL: ("#2C173E", "#E9D5FF", "#BF5AF2"),  # Violet
+    ActionType.WAIT: ("#33210C", "#FDE68A", "#FF9F0A"),  # Amber
+    ActionType.REPEAT_BLOCK: ("#36142A", "#FBCFE8", "#FF375F"),  # Rose Fuchsia
 }
 
 
