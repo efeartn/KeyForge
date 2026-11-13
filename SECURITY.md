@@ -39,8 +39,12 @@ KeyForge is built from the ground up with a **Security-First Architecture** desi
 - **Mitigation**:
   - Profile paths are canonicalized with `Path.resolve()`, verified against null bytes, restricted to `.json` / `.kfmacro.json` extensions, and written atomically via temporary file swap.
 
-### 1.6 Zero Telemetry & Air-Gapped Operation
-- KeyForge makes **zero network connections**, includes no analytics, no telemetry, no update pings, and no third-party tracking libraries.
+### 1.6 Zero Telemetry & SHA-256 Verified Auto-Updater
+- KeyForge collects **zero analytics, usage telemetry, advertising SDKs, or third-party tracking**.
+- To protect against supply-chain tampering, KeyForge's built-in updater (`keyforge.updater`):
+  - Contacts only the official GitHub Releases API over **HTTPS** (`https://api.github.com/repos/efeartn/KeyForge/releases/latest`) and rejects insecure `http://` redirects or unsupported schemes.
+  - Verifies the downloaded executable stream using constant-time **SHA-256 (`hmac.compare_digest`)** against the release `.sha256.txt` digest before allowing replacement.
+  - Preserves user configuration (`config.json`) and active profile backups in the OS-standard user data directory across upgrades, and supports disabling startup update checks via `"check_updates_on_startup": false` in `config.json` for fully air-gapped environments.
 
 ## 2. Reporting a Vulnerability
 

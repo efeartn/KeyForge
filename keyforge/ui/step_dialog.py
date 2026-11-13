@@ -21,14 +21,20 @@ from keyforge.ui.theme import (
     ACCENT_DANGER,
     ACCENT_PRIMARY,
     ACCENT_PRIMARY_HOVER,
-    ACCENT_SUCCESS,
+    ACCENT_WARNING,
     BG_CARD,
+    BG_ELEVATED,
     BG_INPUT,
     BG_PANEL,
     BORDER_SUBTLE,
+    BTN_NEUTRAL,
+    BTN_NEUTRAL_HOVER,
+    TEXT_MUTED,
     TEXT_PRIMARY,
     TEXT_SECONDARY,
     apply_window_icon,
+    center_window_on_parent,
+    get_fonts,
 )
 
 
@@ -43,21 +49,27 @@ class StepEditorDialog(ctk.CTkToplevel):
     ) -> None:
         super().__init__(master)
         self.title("Edit Macro Step" if initial_action else "Add Macro Step")
-        self.geometry("520x540")
         self.resizable(False, False)
         self.configure(fg_color=BG_PANEL)
-        apply_window_icon(self)
 
+        self._fonts = get_fonts(master)
         self._initial = initial_action
         self._on_save = on_save
         self.result_action: MacroAction | None = None
+        self._initial_repeat_dsl: str | None = None
+        self._initial_repeat_subs: list[MacroAction] = []
+
+        center_window_on_parent(self, master, 500, 470)
+        apply_window_icon(self)
 
         self.transient(master)
         with contextlib.suppress(Exception):
             self.grab_set()
 
-        self.bind("<Escape>", lambda _e: self.destroy())
-        self.bind("<Return>", lambda _e: self._on_submit())
+        self.bind("<Escape>", lambda _e: self._on_close())
+        self.protocol("WM_DELETE_WINDOW", self._on_close)
+        # Use Ctrl+Enter rather than global <Return> so CTkComboBox input/selection never misfires.
+        self.bind("<Control-Return>", lambda _e: self._on_submit())
 
         self._build_ui()
         if initial_action is not None:
@@ -68,11 +80,11 @@ class StepEditorDialog(ctk.CTkToplevel):
     def _build_ui(self) -> None:
         header = ctk.CTkLabel(
             self,
-            text="⚡ Configure Macro Action Step",
-            font=ctk.CTkFont(size=17, weight="bold"),
+            text="Edit Action Step" if self._initial else "New Action Step",
+            font=self._fonts["title"],
             text_color=TEXT_PRIMARY,
         )
-        header.pack(padx=20, pady=(16, 10), anchor="w")
+        header.pack(padx=20, pady=(14, 8), anchor="w")
 
         form = ctk.CTkFrame(
             self,
@@ -81,12 +93,12 @@ class StepEditorDialog(ctk.CTkToplevel):
             border_width=1,
             border_color=BORDER_SUBTLE,
         )
-        form.pack(fill="both", expand=True, padx=20, pady=6)
+        form.pack(fill="both", expand=True, padx=20, pady=(0, 6))
 
         # Action Type
         row_type = ctk.CTkFrame(form, fg_color="transparent")
-        row_type.pack(fill="x", padx=16, pady=(14, 8))
-        ctk.CTkLabel(row_type, text="Action Type:", width=130, anchor="w").pack(side="left")
+        row_type.pack(fill="x", padx=16, pady=(12, 5))
+        ctk.CTkLabel(row_type, text="Action Type:", width=130, anchor="w", font=self._fonts["body"]).pack(side="left")
         self.type_var = ctk.StringVar(value=ActionType.KEY_PRESS.value)
         self.type_menu = ctk.CTkOptionMenu(
             row_type,
@@ -94,46 +106,61 @@ class StepEditorDialog(ctk.CTkToplevel):
             values=[t.value for t in ActionType],
             command=self._on_type_changed,
             width=260,
+            fg_color=BG_ELEVATED,
+            button_color=BTN_NEUTRAL,
+            button_hover_color=BTN_NEUTRAL_HOVER,
+            font=self._fonts["body"],
         )
         self.type_menu.pack(side="left", padx=8)
 
         # Optional Label
         row_label = ctk.CTkFrame(form, fg_color="transparent")
-        row_label.pack(fill="x", padx=16, pady=6)
-        ctk.CTkLabel(row_label, text="Step Comment:", width=130, anchor="w").pack(side="left")
+        row_label.pack(fill="x", padx=16, pady=5)
+        ctk.CTkLabel(row_label, text="Step Comment:", width=130, anchor="w", font=self._fonts["body"]).pack(side="left")
         self.label_entry = ctk.CTkEntry(
             row_label,
             placeholder_text="Optional note (e.g. Interact / Reload)",
             fg_color=BG_INPUT,
+            border_color=BORDER_SUBTLE,
             width=260,
+            font=self._fonts["body"],
         )
         self.label_entry.pack(side="left", padx=8)
 
         # Dynamic container for type-specific fields
         self.dynamic_frame = ctk.CTkFrame(form, fg_color="transparent")
-        self.dynamic_frame.pack(fill="both", expand=True, padx=16, pady=8)
+        self.dynamic_frame.pack(fill="both", expand=True, padx=16, pady=(6, 10))
 
         # Error banner
         self.error_label = ctk.CTkLabel(
             self,
             text="",
             text_color=ACCENT_DANGER,
-            font=ctk.CTkFont(size=12),
-            wraplength=460,
+            font=self._fonts["small"],
+            wraplength=455,
         )
         self.error_label.pack(padx=20, pady=(2, 2))
 
         # Footer buttons
         btn_row = ctk.CTkFrame(self, fg_color="transparent")
-        btn_row.pack(fill="x", padx=20, pady=(6, 16))
+        btn_row.pack(fill="x", padx=20, pady=(4, 14))
+
+        ctk.CTkLabel(
+            btn_row,
+            text="Ctrl+Enter to save",
+            font=self._fonts["caption"],
+            text_color=TEXT_MUTED,
+        ).pack(side="left")
 
         ctk.CTkButton(
             btn_row,
             text="Cancel",
-            fg_color="#334155",
-            hover_color="#475569",
-            width=110,
-            command=self.destroy,
+            fg_color=BTN_NEUTRAL,
+            hover_color=BTN_NEUTRAL_HOVER,
+            width=104,
+            height=32,
+            font=self._fonts["body"],
+            command=self._on_close,
         ).pack(side="right", padx=(8, 0))
 
         ctk.CTkButton(
@@ -141,8 +168,9 @@ class StepEditorDialog(ctk.CTkToplevel):
             text="Save Step",
             fg_color=ACCENT_PRIMARY,
             hover_color=ACCENT_PRIMARY_HOVER,
-            width=140,
-            font=ctk.CTkFont(weight="bold"),
+            width=132,
+            height=32,
+            font=self._fonts["body_bold"],
             command=self._on_submit,
         ).pack(side="right")
 
@@ -152,153 +180,222 @@ class StepEditorDialog(ctk.CTkToplevel):
 
     def _on_type_changed(self, selected_type: str) -> None:
         self._clear_dynamic()
+        self._initial_repeat_dsl = None
+        self._initial_repeat_subs = []
         self.error_label.configure(text="")
         atype = ActionType(selected_type)
 
         if atype in (ActionType.KEY_PRESS, ActionType.KEY_DOWN, ActionType.KEY_UP):
             r1 = ctk.CTkFrame(self.dynamic_frame, fg_color="transparent")
-            r1.pack(fill="x", pady=6)
-            ctk.CTkLabel(r1, text="Key / Combo:", width=130, anchor="w").pack(side="left")
+            r1.pack(fill="x", pady=5)
+            ctk.CTkLabel(r1, text="Key / Combo:", width=130, anchor="w", font=self._fonts["body"]).pack(side="left")
             self.key_combo = ctk.CTkComboBox(
                 r1,
                 values=list_common_keys(),
                 width=190,
                 fg_color=BG_INPUT,
+                border_color=BORDER_SUBTLE,
+                button_color=BTN_NEUTRAL,
+                button_hover_color=BTN_NEUTRAL_HOVER,
+                font=self._fonts["body"],
             )
             self.key_combo.set("E")
             self.key_combo.pack(side="left", padx=8)
 
             if atype == ActionType.KEY_PRESS:
                 r2 = ctk.CTkFrame(self.dynamic_frame, fg_color="transparent")
-                r2.pack(fill="x", pady=6)
-                ctk.CTkLabel(r2, text="Hold Duration (ms):", width=130, anchor="w").pack(side="left")
-                self.hold_entry = ctk.CTkEntry(r2, width=120, fg_color=BG_INPUT)
+                r2.pack(fill="x", pady=5)
+                ctk.CTkLabel(r2, text="Hold Duration (ms):", width=130, anchor="w", font=self._fonts["body"]).pack(
+                    side="left"
+                )
+                self.hold_entry = ctk.CTkEntry(
+                    r2, width=120, fg_color=BG_INPUT, border_color=BORDER_SUBTLE, font=self._fonts["body"]
+                )
                 self.hold_entry.insert(0, "25")
                 self.hold_entry.pack(side="left", padx=8)
 
         elif atype == ActionType.WAIT:
             r1 = ctk.CTkFrame(self.dynamic_frame, fg_color="transparent")
-            r1.pack(fill="x", pady=6)
-            ctk.CTkLabel(r1, text="Wait Duration (ms):", width=130, anchor="w").pack(side="left")
-            self.wait_entry = ctk.CTkEntry(r1, width=140, fg_color=BG_INPUT)
+            r1.pack(fill="x", pady=5)
+            ctk.CTkLabel(r1, text="Wait Duration (ms):", width=130, anchor="w", font=self._fonts["body"]).pack(
+                side="left"
+            )
+            self.wait_entry = ctk.CTkEntry(
+                r1, width=140, fg_color=BG_INPUT, border_color=BORDER_SUBTLE, font=self._fonts["body"]
+            )
             self.wait_entry.insert(0, "200")
             self.wait_entry.pack(side="left", padx=8)
 
             r2 = ctk.CTkFrame(self.dynamic_frame, fg_color="transparent")
-            r2.pack(fill="x", pady=6)
-            ctk.CTkLabel(r2, text="Random Jitter (±ms):", width=130, anchor="w").pack(side="left")
-            self.jitter_entry = ctk.CTkEntry(r2, width=140, fg_color=BG_INPUT)
+            r2.pack(fill="x", pady=5)
+            ctk.CTkLabel(r2, text="Random Jitter (±ms):", width=130, anchor="w", font=self._fonts["body"]).pack(
+                side="left"
+            )
+            self.jitter_entry = ctk.CTkEntry(
+                r2, width=140, fg_color=BG_INPUT, border_color=BORDER_SUBTLE, font=self._fonts["body"]
+            )
             self.jitter_entry.insert(0, "0")
             self.jitter_entry.pack(side="left", padx=8)
             ctk.CTkLabel(
                 self.dynamic_frame,
                 text="Tip: Adding 5–20ms jitter makes repeats behave like natural human timing.",
                 text_color=TEXT_SECONDARY,
-                font=ctk.CTkFont(size=11),
+                font=self._fonts["small"],
             ).pack(anchor="w", pady=(4, 0))
 
         elif atype == ActionType.MOUSE_CLICK:
             r1 = ctk.CTkFrame(self.dynamic_frame, fg_color="transparent")
-            r1.pack(fill="x", pady=6)
-            ctk.CTkLabel(r1, text="Mouse Button:", width=130, anchor="w").pack(side="left")
+            r1.pack(fill="x", pady=4)
+            ctk.CTkLabel(r1, text="Mouse Button:", width=130, anchor="w", font=self._fonts["body"]).pack(side="left")
             self.btn_var = ctk.StringVar(value=MouseButton.LEFT.value)
             ctk.CTkOptionMenu(
                 r1,
                 variable=self.btn_var,
                 values=[b.value for b in MouseButton],
                 width=160,
+                fg_color=BG_ELEVATED,
+                button_color=BTN_NEUTRAL,
+                button_hover_color=BTN_NEUTRAL_HOVER,
+                font=self._fonts["body"],
             ).pack(side="left", padx=8)
 
             r2 = ctk.CTkFrame(self.dynamic_frame, fg_color="transparent")
-            r2.pack(fill="x", pady=6)
-            ctk.CTkLabel(r2, text="Click Mode:", width=130, anchor="w").pack(side="left")
+            r2.pack(fill="x", pady=4)
+            ctk.CTkLabel(r2, text="Click Mode:", width=130, anchor="w", font=self._fonts["body"]).pack(side="left")
             self.click_type_var = ctk.StringVar(value=ClickType.SINGLE.value)
             ctk.CTkOptionMenu(
                 r2,
                 variable=self.click_type_var,
                 values=[c.value for c in ClickType],
                 width=160,
+                fg_color=BG_ELEVATED,
+                button_color=BTN_NEUTRAL,
+                button_hover_color=BTN_NEUTRAL_HOVER,
+                font=self._fonts["body"],
             ).pack(side="left", padx=8)
 
+            r_hold = ctk.CTkFrame(self.dynamic_frame, fg_color="transparent")
+            r_hold.pack(fill="x", pady=4)
+            ctk.CTkLabel(r_hold, text="Hold Duration (ms):", width=130, anchor="w", font=self._fonts["body"]).pack(
+                side="left"
+            )
+            self.hold_entry = ctk.CTkEntry(
+                r_hold, width=100, fg_color=BG_INPUT, border_color=BORDER_SUBTLE, font=self._fonts["body"]
+            )
+            self.hold_entry.insert(0, "25")
+            self.hold_entry.pack(side="left", padx=8)
+
             r3 = ctk.CTkFrame(self.dynamic_frame, fg_color="transparent")
-            r3.pack(fill="x", pady=6)
-            ctk.CTkLabel(r3, text="Coordinates (X, Y):", width=130, anchor="w").pack(side="left")
-            self.x_entry = ctk.CTkEntry(r3, placeholder_text="Curr X", width=80, fg_color=BG_INPUT)
+            r3.pack(fill="x", pady=4)
+            ctk.CTkLabel(r3, text="Coordinates (X, Y):", width=130, anchor="w", font=self._fonts["body"]).pack(
+                side="left"
+            )
+            self.x_entry = ctk.CTkEntry(
+                r3, placeholder_text="Curr X", width=76, fg_color=BG_INPUT, border_color=BORDER_SUBTLE
+            )
             self.x_entry.pack(side="left", padx=(8, 4))
-            self.y_entry = ctk.CTkEntry(r3, placeholder_text="Curr Y", width=80, fg_color=BG_INPUT)
+            self.y_entry = ctk.CTkEntry(
+                r3, placeholder_text="Curr Y", width=76, fg_color=BG_INPUT, border_color=BORDER_SUBTLE
+            )
             self.y_entry.pack(side="left", padx=4)
             ctk.CTkButton(
                 r3,
-                text="Pick Current XY",
-                width=105,
-                fg_color=ACCENT_SUCCESS,
+                text="Pick XY",
+                width=82,
+                height=28,
+                fg_color=BTN_NEUTRAL,
+                hover_color=BTN_NEUTRAL_HOVER,
+                font=self._fonts["small_bold"],
                 command=self._capture_current_xy,
             ).pack(side="left", padx=6)
             ctk.CTkLabel(
                 self.dynamic_frame,
                 text="Leave X and Y blank to click at the current live cursor position.",
                 text_color=TEXT_SECONDARY,
-                font=ctk.CTkFont(size=11),
+                font=self._fonts["small"],
             ).pack(anchor="w", pady=(2, 0))
 
         elif atype == ActionType.MOUSE_MOVE:
             r1 = ctk.CTkFrame(self.dynamic_frame, fg_color="transparent")
-            r1.pack(fill="x", pady=6)
-            ctk.CTkLabel(r1, text="Movement Mode:", width=130, anchor="w").pack(side="left")
+            r1.pack(fill="x", pady=5)
+            ctk.CTkLabel(r1, text="Movement Mode:", width=130, anchor="w", font=self._fonts["body"]).pack(side="left")
             self.move_mode_var = ctk.StringVar(value=MoveMode.ABSOLUTE.value)
             ctk.CTkOptionMenu(
                 r1,
                 variable=self.move_mode_var,
                 values=[m.value for m in MoveMode],
                 width=160,
+                fg_color=BG_ELEVATED,
+                button_color=BTN_NEUTRAL,
+                button_hover_color=BTN_NEUTRAL_HOVER,
+                font=self._fonts["body"],
             ).pack(side="left", padx=8)
 
             r2 = ctk.CTkFrame(self.dynamic_frame, fg_color="transparent")
-            r2.pack(fill="x", pady=6)
-            ctk.CTkLabel(r2, text="Target X / Y:", width=130, anchor="w").pack(side="left")
-            self.x_entry = ctk.CTkEntry(r2, width=80, fg_color=BG_INPUT)
+            r2.pack(fill="x", pady=5)
+            ctk.CTkLabel(r2, text="Target X / Y:", width=130, anchor="w", font=self._fonts["body"]).pack(side="left")
+            self.x_entry = ctk.CTkEntry(r2, width=76, fg_color=BG_INPUT, border_color=BORDER_SUBTLE)
             self.x_entry.insert(0, "500")
             self.x_entry.pack(side="left", padx=(8, 4))
-            self.y_entry = ctk.CTkEntry(r2, width=80, fg_color=BG_INPUT)
+            self.y_entry = ctk.CTkEntry(r2, width=76, fg_color=BG_INPUT, border_color=BORDER_SUBTLE)
             self.y_entry.insert(0, "500")
             self.y_entry.pack(side="left", padx=4)
             ctk.CTkButton(
                 r2,
-                text="Pick Current XY",
-                width=105,
-                fg_color=ACCENT_SUCCESS,
+                text="Pick XY",
+                width=82,
+                height=28,
+                fg_color=BTN_NEUTRAL,
+                hover_color=BTN_NEUTRAL_HOVER,
+                font=self._fonts["small_bold"],
                 command=self._capture_current_xy,
             ).pack(side="left", padx=6)
 
         elif atype == ActionType.MOUSE_SCROLL:
             r1 = ctk.CTkFrame(self.dynamic_frame, fg_color="transparent")
-            r1.pack(fill="x", pady=6)
-            ctk.CTkLabel(r1, text="Vertical Ticks (+Up/-Dn):", width=155, anchor="w").pack(side="left")
-            self.scroll_dy_entry = ctk.CTkEntry(r1, width=100, fg_color=BG_INPUT)
+            r1.pack(fill="x", pady=5)
+            ctk.CTkLabel(r1, text="Vertical Ticks (+Up/-Dn):", width=155, anchor="w", font=self._fonts["body"]).pack(
+                side="left"
+            )
+            self.scroll_dy_entry = ctk.CTkEntry(r1, width=100, fg_color=BG_INPUT, border_color=BORDER_SUBTLE)
             self.scroll_dy_entry.insert(0, "-3")
             self.scroll_dy_entry.pack(side="left", padx=8)
 
             r2 = ctk.CTkFrame(self.dynamic_frame, fg_color="transparent")
-            r2.pack(fill="x", pady=6)
-            ctk.CTkLabel(r2, text="Horizontal Ticks:", width=155, anchor="w").pack(side="left")
-            self.scroll_dx_entry = ctk.CTkEntry(r2, width=100, fg_color=BG_INPUT)
+            r2.pack(fill="x", pady=5)
+            ctk.CTkLabel(r2, text="Horizontal Ticks:", width=155, anchor="w", font=self._fonts["body"]).pack(
+                side="left"
+            )
+            self.scroll_dx_entry = ctk.CTkEntry(r2, width=100, fg_color=BG_INPUT, border_color=BORDER_SUBTLE)
             self.scroll_dx_entry.insert(0, "0")
             self.scroll_dx_entry.pack(side="left", padx=8)
 
         elif atype == ActionType.REPEAT_BLOCK:
             r1 = ctk.CTkFrame(self.dynamic_frame, fg_color="transparent")
-            r1.pack(fill="x", pady=6)
-            ctk.CTkLabel(r1, text="Repeat Count:", width=130, anchor="w").pack(side="left")
-            self.repeat_count_entry = ctk.CTkEntry(r1, width=120, fg_color=BG_INPUT)
+            r1.pack(fill="x", pady=5)
+            ctk.CTkLabel(r1, text="Repeat Count:", width=130, anchor="w", font=self._fonts["body"]).pack(side="left")
+            self.repeat_count_entry = ctk.CTkEntry(r1, width=120, fg_color=BG_INPUT, border_color=BORDER_SUBTLE)
             self.repeat_count_entry.insert(0, "3")
             self.repeat_count_entry.pack(side="left", padx=8)
 
             r2 = ctk.CTkFrame(self.dynamic_frame, fg_color="transparent")
-            r2.pack(fill="x", pady=6)
-            ctk.CTkLabel(r2, text="Inner Steps DSL:", width=130, anchor="w").pack(side="left")
-            self.repeat_dsl_entry = ctk.CTkEntry(r2, width=260, fg_color=BG_INPUT)
+            r2.pack(fill="x", pady=5)
+            ctk.CTkLabel(r2, text="Inner Steps DSL:", width=130, anchor="w", font=self._fonts["body"]).pack(side="left")
+            self.repeat_dsl_entry = ctk.CTkEntry(
+                r2, width=260, fg_color=BG_INPUT, border_color=BORDER_SUBTLE, font=self._fonts["mono_small"]
+            )
             self.repeat_dsl_entry.insert(0, "Press F -> Wait 120ms")
             self.repeat_dsl_entry.pack(side="left", padx=8)
+
+            self.repeat_note_lbl = ctk.CTkLabel(
+                self.dynamic_frame,
+                text="",
+                text_color=ACCENT_WARNING,
+                font=self._fonts["small"],
+                wraplength=415,
+                justify="left",
+            )
+            self.repeat_note_lbl.pack(anchor="w", pady=(4, 0))
 
     def _capture_current_xy(self) -> None:
         if IS_WINDOWS:
@@ -331,6 +428,8 @@ class StepEditorDialog(ctk.CTkToplevel):
         elif atype == ActionType.MOUSE_CLICK:
             self.btn_var.set(act.button.value)
             self.click_type_var.set(act.click_type.value)
+            self.hold_entry.delete(0, "end")
+            self.hold_entry.insert(0, str(act.hold_ms))
             self.x_entry.delete(0, "end")
             self.y_entry.delete(0, "end")
             if act.x is not None and act.y is not None:
@@ -350,8 +449,19 @@ class StepEditorDialog(ctk.CTkToplevel):
         elif atype == ActionType.REPEAT_BLOCK:
             self.repeat_count_entry.delete(0, "end")
             self.repeat_count_entry.insert(0, str(act.repeat_count))
+            formatted_dsl = format_actions_to_dsl(act.sub_actions)
+            self._initial_repeat_dsl = formatted_dsl
+            self._initial_repeat_subs = [MacroAction.from_dict(s.to_dict()) for s in act.sub_actions]
             self.repeat_dsl_entry.delete(0, "end")
-            self.repeat_dsl_entry.insert(0, format_actions_to_dsl(act.sub_actions))
+            self.repeat_dsl_entry.insert(0, formatted_dsl)
+            disabled_cnt = sum(1 for s in act.sub_actions if not s.enabled)
+            if disabled_cnt > 0 and hasattr(self, "repeat_note_lbl"):
+                self.repeat_note_lbl.configure(
+                    text=(
+                        f"Note: {disabled_cnt} disabled inner step(s) are hidden from DSL "
+                        "and will be preserved unless you edit the Inner Steps text."
+                    )
+                )
 
     def _on_submit(self) -> None:
         try:
@@ -378,8 +488,7 @@ class StepEditorDialog(ctk.CTkToplevel):
             elif atype == ActionType.MOUSE_CLICK:
                 kwargs["button"] = MouseButton(self.btn_var.get())
                 kwargs["click_type"] = ClickType(self.click_type_var.get())
-                if self._initial is not None and self._initial.action_type == ActionType.MOUSE_CLICK:
-                    kwargs["hold_ms"] = self._initial.hold_ms
+                kwargs["hold_ms"] = int(self.hold_entry.get().strip() or "25")
                 x_raw = self.x_entry.get().strip()
                 y_raw = self.y_entry.get().strip()
                 kwargs["x"] = int(x_raw) if x_raw else None
@@ -394,12 +503,31 @@ class StepEditorDialog(ctk.CTkToplevel):
             elif atype == ActionType.REPEAT_BLOCK:
                 kwargs["repeat_count"] = int(self.repeat_count_entry.get().strip())
                 dsl_text = self.repeat_dsl_entry.get().strip()
-                kwargs["sub_actions"] = parse_quick_expression(dsl_text)
+                if (
+                    self._initial is not None
+                    and self._initial.action_type == ActionType.REPEAT_BLOCK
+                    and self._initial_repeat_dsl is not None
+                    and dsl_text == self._initial_repeat_dsl
+                ):
+                    kwargs["sub_actions"] = [MacroAction.from_dict(s.to_dict()) for s in self._initial_repeat_subs]
+                else:
+                    kwargs["sub_actions"] = parse_quick_expression(dsl_text)
 
             new_action = MacroAction(**kwargs)
             self.result_action = new_action
             if self._on_save is not None:
                 self._on_save(new_action)
-            self.destroy()
+            self._on_close()
         except Exception as exc:
             self.error_label.configure(text=f"Validation Error: {exc}")
+
+    def _on_close(self) -> None:
+        aid = getattr(self, "_kf_icon_after_id", None)
+        if aid is not None:
+            with contextlib.suppress(Exception):
+                self.after_cancel(aid)
+            self._kf_icon_after_id = None
+        with contextlib.suppress(Exception):
+            self.grab_release()
+        with contextlib.suppress(Exception):
+            self.destroy()

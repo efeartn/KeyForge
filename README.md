@@ -22,7 +22,7 @@
 ## Live Studio Preview
 
 <div align="center">
-  <img src="keyforge/assets/studio_screenshot.png" alt="KeyForge Studio v1.1.0 Desktop Interface" width="100%" />
+  <img src="keyforge/assets/studio_screenshot.png" alt="KeyForge Studio v1.2.0 Desktop Interface" width="100%" />
 </div>
 
 ---
@@ -62,6 +62,11 @@ Every release is automatically tested, audited, and compiled by [GitHub Actions]
 ---
 
 ## Core Studio Features
+
+### 0. Simple Mode (`Simple`) vs Full Studio (`Studio`) + Auto-Updater
+- **Two Workspaces for Every User**: Switch cleanly between **Simple** mode (zero-jargon **Auto-Clicker** and **Key Spammer** sliders synced live to your macro) and **Studio** mode (full visual timeline, recorder, DSL, and static security inspector).
+- **Lightweight Dark Titanium Interface**: Built natively with CustomTkinter + Pillow without Chromium/WebView2 runtime overhead so it runs smoothly even on older or low-memory PCs and adapts to 1280×720 / High-DPI screens.
+- **Startup Update Check & SHA-256 In-App Updater**: Automatically checks GitHub Releases on launch, notifies you via a non-intrusive banner and header **Updates** pill when a newer version exists, verifies downloads with SHA-256 (`hmac.compare_digest`), and preserves all hotkeys, preferences, and your active macro profile across upgrades.
 
 ### 1. Visual Action Sequence Timeline
 - **Color-Coded Step Cards**: Every action type (`KEY`, `WAIT`, `CLICK`, `MOVE`, `SCROLL`, `LOOP`) has a distinct neon accent stripe, semantic badge, technical subtitle, and right-aligned monospace metric pill.
@@ -156,10 +161,13 @@ KeyForge/
 │   │   ├── integrity.py          # Canonical SHA-256 Signing & Constant-Time Verification
 │   │   └── validator.py          # Allowlist Schema, Path & Complexity Budget Validator
 │   ├── ui/
-│   │   ├── app.py                # Modern Obsidian & Neon Studio Desktop GUI
+│   │   ├── app.py                # Dual Simple/Studio Dark Titanium Desktop GUI
 │   │   ├── step_dialog.py        # Modal Step Inspector with Live XY Coordinate Picker
-│   │   └── theme.py              # Studio Palette, Action Badges & Window Icon Loader
-│   └── main.py                   # CLI & Desktop GUI Entry Point
+│   │   ├── theme.py              # Dark Titanium Palette, Platform Fonts & Window Helpers
+│   │   └── update_dialog.py      # SHA-256 Verified GitHub Releases Update Sheet
+│   ├── config.py                 # Atomic AppData/XDG Config & Profile Preservation
+│   ├── main.py                   # CLI & Desktop GUI Entry Point
+│   └── updater.py                # SemVer Release Client, SHA-256 Streamer & Hot-Swapper
 ├── scripts/build_exe.py          # Cross-Platform PyInstaller Compiler + SHA-256 Generator
 └── tests/                        # Unit, Security, Engine, CLI & GUI Test Suite
 ```

@@ -187,6 +187,28 @@ def get_builtin_presets() -> dict[str, MacroProfile]:
     presets = [
         create_default_profile(),
         MacroProfile(
+            name="Simple Auto-Clicker (10 CPS)",
+            description="Left Click every 100ms (10 CPS) with ±10ms natural timing jitter.",
+            repeat_mode=RepeatMode.INFINITE,
+            repeat_count=100,
+            inter_cycle_delay_ms=0,
+            actions=[
+                make_mouse_click(MouseButton.LEFT, ClickType.SINGLE, hold_ms=15, label="Left Click"),
+                make_wait(85, jitter_ms=10, label="10 CPS Interval"),
+            ],
+        ),
+        MacroProfile(
+            name="Key Spammer (Press E Loop)",
+            description="Repeatedly taps [E] every 100ms with ±10ms natural timing jitter.",
+            repeat_mode=RepeatMode.INFINITE,
+            repeat_count=100,
+            inter_cycle_delay_ms=0,
+            actions=[
+                make_key_press("E", hold_ms=25, label="Tap E"),
+                make_wait(75, jitter_ms=10, label="Repeat Interval"),
+            ],
+        ),
+        MacroProfile(
             name="Humanized Auto-Clicker (20 CPS)",
             description="Rapid Left Click every 50ms with ±12ms natural timing jitter.",
             repeat_mode=RepeatMode.INFINITE,

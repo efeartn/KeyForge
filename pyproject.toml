@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "keyforge"
-version = "1.1.0"
+version = "1.2.0"
 description = "A modern, secure, FOSS visual keyboard & mouse macro builder, recorder, and auto-clicker for Windows."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -54,7 +54,7 @@ include = ["keyforge*"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 python_files = ["test_*.py"]
-addopts = "-v --tb=short"
+addopts = "-v --tb=short --capture=sys"
 
 [tool.ruff]
 line-length = 120
