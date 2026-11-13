@@ -696,6 +696,8 @@ def build_windows_hotswap_script(new_binary: Path, target_exe: Path, app_pid: in
 
 
 def _resolve_powershell_executable() -> str:
+    if os.name != "nt":
+        return "powershell.exe"
     sys_root = os.environ.get("SystemRoot", r"C:\Windows")
     candidate = Path(sys_root) / "System32" / "WindowsPowerShell" / "v1.0" / "powershell.exe"
     if candidate.is_file():

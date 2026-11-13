@@ -1720,7 +1720,10 @@ class KeyForgeApp(ctk.CTk):
         )
 
     def _commit_simple_slider_change(self, target: str) -> None:
-        self._simple_slider_after_id = None
+        if self._simple_slider_after_id is not None:
+            with contextlib.suppress(Exception):
+                self.after_cancel(self._simple_slider_after_id)
+            self._simple_slider_after_id = None
         if self._closing:
             return
         if target == "clicker":
@@ -2023,7 +2026,10 @@ class KeyForgeApp(ctk.CTk):
         self._filter_after_id = self.after(120, self._apply_filter_debounced)
 
     def _apply_filter_debounced(self) -> None:
-        self._filter_after_id = None
+        if self._filter_after_id is not None:
+            with contextlib.suppress(Exception):
+                self.after_cancel(self._filter_after_id)
+            self._filter_after_id = None
         if self._closing:
             return
         new_query = self.filter_entry.get().strip().lower()
