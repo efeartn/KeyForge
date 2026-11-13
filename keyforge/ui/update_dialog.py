@@ -93,7 +93,7 @@ class UpdateDialog(ctk.CTkToplevel):
         self._ui_queue: queue.SimpleQueue[tuple[str, Any]] = queue.SimpleQueue()
         self._poll_after_id: str | None = None
 
-        center_window_on_parent(self, master, 540, 500)
+        center_window_on_parent(self, master, 540, 540)
         apply_window_icon(self)
 
         self.transient(master)
@@ -291,6 +291,7 @@ class UpdateDialog(ctk.CTkToplevel):
 
         self.notes_box = ctk.CTkTextbox(
             self,
+            height=160,
             fg_color=BG_INPUT,
             border_width=1,
             border_color=BORDER_SUBTLE,
