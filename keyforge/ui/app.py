@@ -20,10 +20,13 @@ import customtkinter as ctk
 from keyforge import __version__
 from keyforge.config import (
     AppConfig,
+    delete_custom_preset,
     load_active_profile_backup,
     load_app_config,
+    load_custom_presets,
     save_active_profile_backup,
     save_app_config,
+    save_custom_preset,
 )
 from keyforge.engine.backend import DryRunBackend
 from keyforge.engine.executor import ExecutionTelemetry, ExecutorState, MacroExecutor
@@ -57,6 +60,7 @@ from keyforge.security.integrity import (
     save_profile_secure,
 )
 from keyforge.security.validator import validate_profile_complexity
+from keyforge.ui.mini_hud import MiniHudWindow
 from keyforge.ui.step_dialog import StepEditorDialog
 from keyforge.ui.theme import (
     ACCENT_CYAN,
@@ -66,6 +70,7 @@ from keyforge.ui.theme import (
     ACCENT_PRIMARY_HOVER,
     ACCENT_SUCCESS,
     ACCENT_WARNING,
+    ACCENT_WARNING_HOVER,
     BADGE_CRIT_BG,
     BADGE_CRIT_FG,
     BADGE_OK_BG,
@@ -169,7 +174,9 @@ class KeyForgeApp(ctk.CTk):
 
         # Load persisted configuration & active profile
         self.app_config: AppConfig = load_app_config()
-        self.presets: dict[str, MacroProfile] = get_builtin_presets()
+        self._builtin_preset_names: set[str] = set()
+        self.presets: dict[str, MacroProfile] = {}
+        self._reload_presets_catalog()
         restored_profile = load_active_profile_backup() if self.app_config.auto_save_active_profile else None
         if restored_profile is not None:
             self.profile: MacroProfile = restored_profile
@@ -206,6 +213,9 @@ class KeyForgeApp(ctk.CTk):
         self._filter_after_id: str | None = None
         self._simple_slider_after_id: str | None = None
         self._toast_after_id: str | None = None
+        self._countdown_remaining_ms: int = 0
+        self._countdown_after_id: str | None = None
+        self._mini_hud: MiniHudWindow | None = None
         self._filter_query: str = ""
         self._undo_stack: list[list[dict[str, Any]]] = []
         self._redo_stack: list[list[dict[str, Any]]] = []
@@ -235,6 +245,7 @@ class KeyForgeApp(ctk.CTk):
             value=_SIMPLE_REPEAT_LABELS.get(self.profile.repeat_mode, "Forever")
         )
         self.preset_var = ctk.StringVar(value=self.profile.name)
+        self.countdown_var = ctk.StringVar(value=f"{self.app_config.start_countdown_sec}s")
 
         # Configure responsive DPI-clamped startup size & minsize
         self._configure_initial_geometry()
@@ -418,19 +429,43 @@ class KeyForgeApp(ctk.CTk):
             variable=self.preset_var,
             values=list(self.presets.keys()),
             command=self.load_preset,
-            width=165,
+            width=148,
             height=28,
             fg_color=BG_ELEVATED,
             button_color=BTN_NEUTRAL,
             button_hover_color=BTN_NEUTRAL_HOVER,
             font=self.fonts["small"],
         )
-        self.preset_menu.pack(side="left", padx=(0, 6), pady=13)
+        self.preset_menu.pack(side="left", padx=(0, 4), pady=13)
+
+        self.save_preset_btn = ctk.CTkButton(
+            bar,
+            text="+ Preset",
+            width=64,
+            height=28,
+            fg_color=BTN_NEUTRAL,
+            hover_color=BTN_NEUTRAL_HOVER,
+            font=self.fonts["small_bold"],
+            command=self.action_save_custom_preset,
+        )
+        self.save_preset_btn.pack(side="left", padx=(0, 2), pady=13)
+
+        self.delete_preset_btn = ctk.CTkButton(
+            bar,
+            text="✕",
+            width=28,
+            height=28,
+            fg_color=BTN_NEUTRAL,
+            hover_color=BTN_NEUTRAL_HOVER,
+            font=self.fonts["small_bold"],
+            command=self.action_delete_custom_preset,
+        )
+        self.delete_preset_btn.pack(side="left", padx=(0, 6), pady=13)
 
         for label, width, cmd in (
-            ("New", 44, self.action_new_profile),
-            ("Open", 48, self.action_open_profile_dialog),
-            ("Save", 48, self.action_save_profile_dialog),
+            ("New", 42, self.action_new_profile),
+            ("Open", 46, self.action_open_profile_dialog),
+            ("Save", 46, self.action_save_profile_dialog),
         ):
             ctk.CTkButton(
                 bar,
@@ -443,7 +478,7 @@ class KeyForgeApp(ctk.CTk):
                 command=cmd,
             ).pack(side="left", padx=2, pady=13)
 
-        # Right Action Group (Panic -> Updates -> Security Badge)
+        # Right Action Group (Panic -> Mini HUD -> Updates -> Security Badge)
         self.top_panic_btn = ctk.CTkButton(
             bar,
             text=f"Panic Stop ({self.profile.panic_hotkey})",
@@ -454,7 +489,20 @@ class KeyForgeApp(ctk.CTk):
             width=0,
             command=self.trigger_panic_stop,
         )
-        self.top_panic_btn.pack(side="right", padx=(6, 14), pady=12)
+        self.top_panic_btn.pack(side="right", padx=(4, 14), pady=12)
+
+        self.mini_hud_btn = ctk.CTkButton(
+            bar,
+            text="Mini HUD",
+            fg_color=BTN_NEUTRAL,
+            hover_color=BTN_NEUTRAL_HOVER,
+            text_color=TEXT_PRIMARY,
+            font=self.fonts["small_bold"],
+            height=30,
+            width=0,
+            command=self.toggle_mini_hud_mode,
+        )
+        self.mini_hud_btn.pack(side="right", padx=3, pady=12)
 
         self.updates_btn = ctk.CTkButton(
             bar,
@@ -467,7 +515,7 @@ class KeyForgeApp(ctk.CTk):
             width=0,
             command=self.open_update_dialog,
         )
-        self.updates_btn.pack(side="right", padx=4, pady=12)
+        self.updates_btn.pack(side="right", padx=3, pady=12)
 
         self.audit_badge = ctk.CTkButton(
             bar,
@@ -481,7 +529,7 @@ class KeyForgeApp(ctk.CTk):
             width=0,
             command=self._focus_security_audit,
         )
-        self.audit_badge.pack(side="right", padx=4, pady=14)
+        self.audit_badge.pack(side="right", padx=3, pady=14)
 
     def _build_banners(self) -> None:
         """Build collapsible Update Banner and Transient Inline Notification Strip."""
@@ -1062,7 +1110,23 @@ class KeyForgeApp(ctk.CTk):
             variable=self.dry_run_var,
             font=self.fonts["small"],
             command=self._on_dry_run_toggled,
-        ).pack(anchor="w", padx=12, pady=(2, 8))
+        ).pack(anchor="w", padx=12, pady=(2, 6))
+
+        cd_row = ctk.CTkFrame(rep_box, fg_color="transparent")
+        cd_row.pack(fill="x", padx=12, pady=(0, 8))
+        ctk.CTkLabel(cd_row, text="Start Delay:", font=self.fonts["small"], text_color=TEXT_SECONDARY).pack(side="left")
+        self.simple_countdown_seg = ctk.CTkSegmentedButton(
+            cd_row,
+            values=["0s", "1s", "3s", "5s"],
+            variable=self.countdown_var,
+            command=self._on_countdown_changed,
+            height=24,
+            fg_color=BG_ROOT,
+            selected_color=ACCENT_PRIMARY,
+            unselected_color=BG_ELEVATED,
+            font=self.fonts["small_bold"],
+        )
+        self.simple_countdown_seg.pack(side="right", fill="x", expand=True, padx=(10, 0))
 
         # Hotkey Summary Pills
         hk_row = ctk.CTkFrame(card, fg_color="transparent")
@@ -1435,6 +1499,20 @@ class KeyForgeApp(ctk.CTk):
             command=self._on_dry_run_toggled,
         )
         self.dry_run_switch.pack(side="right", padx=2)
+
+        self.studio_countdown_menu = ctk.CTkOptionMenu(
+            btn_row,
+            values=["0s", "1s", "3s", "5s"],
+            variable=self.countdown_var,
+            command=self._on_countdown_changed,
+            width=66,
+            height=28,
+            fg_color=BG_INPUT,
+            button_color=BTN_NEUTRAL,
+            button_hover_color=BTN_NEUTRAL_HOVER,
+            font=self.fonts["small_bold"],
+        )
+        self.studio_countdown_menu.pack(side="right", padx=(0, 6))
 
     def _build_inspector_tabs(self, parent: ctk.CTkFrame) -> None:
         self.inspector_tabs = ctk.CTkTabview(
@@ -2504,6 +2582,10 @@ class KeyForgeApp(ctk.CTk):
         self.toggle_recording()
 
     def toggle_execution(self) -> None:
+        if self._countdown_after_id is not None or self._countdown_remaining_ms > 0:
+            self.cancel_countdown("Start countdown cancelled.")
+            return
+
         if self.executor.is_running:
             self.executor.stop()
             self._log_event("Macro execution stopped.")
@@ -2534,6 +2616,54 @@ class KeyForgeApp(ctk.CTk):
             return
 
         self._last_telem_error = None
+        if self.app_config.start_countdown_sec > 0:
+            self._start_countdown(self.app_config.start_countdown_sec * 1000)
+            return
+
+        self._launch_executor_now()
+
+    def _on_countdown_changed(self, selected: str) -> None:
+        with contextlib.suppress(ValueError):
+            sec = max(0, min(10, int(str(selected).strip().rstrip("s"))))
+            self.app_config.start_countdown_sec = sec
+            self.countdown_var.set(f"{sec}s")
+
+    def cancel_countdown(self, log_reason: str | None = None) -> bool:
+        had_countdown = self._countdown_after_id is not None or self._countdown_remaining_ms > 0
+        if self._countdown_after_id is not None:
+            with contextlib.suppress(Exception):
+                self.after_cancel(self._countdown_after_id)
+            self._countdown_after_id = None
+        self._countdown_remaining_ms = 0
+        if had_countdown and log_reason:
+            self._log_event(log_reason)
+        self._update_run_button_ui()
+        return had_countdown
+
+    def _start_countdown(self, total_ms: int) -> None:
+        self.cancel_countdown()
+        self._countdown_remaining_ms = max(100, int(total_ms))
+        self._log_event(f"Starting macro in {self._countdown_remaining_ms / 1000.0:.1f}s...")
+        self._update_run_button_ui()
+        with contextlib.suppress(Exception):
+            if self.winfo_exists():
+                self._countdown_after_id = self.after(100, self._tick_countdown)
+
+    def _tick_countdown(self) -> None:
+        self._countdown_after_id = None
+        if self._closing:
+            return
+        self._countdown_remaining_ms = max(0, self._countdown_remaining_ms - 100)
+        if self._countdown_remaining_ms <= 0:
+            self._launch_executor_now()
+            return
+        self._update_run_button_ui()
+        with contextlib.suppress(Exception):
+            if self.winfo_exists():
+                self._countdown_after_id = self.after(100, self._tick_countdown)
+
+    def _launch_executor_now(self) -> None:
+        self._countdown_remaining_ms = 0
         use_dry_run = self.dry_run_var.get()
         if use_dry_run:
             self.dry_run_backend.clear()
@@ -2556,6 +2686,7 @@ class KeyForgeApp(ctk.CTk):
 
     def trigger_panic_stop(self) -> None:
         """Immediate hardware panic kill-switch handler."""
+        self.cancel_countdown()
         if self.recorder.is_recording:
             self.recorder.stop()
             self._refresh_hotkey_displays()
@@ -2608,6 +2739,76 @@ class KeyForgeApp(ctk.CTk):
     # -------------------------------------------------------------------------
     # Presets, Profile I/O & Security Audit
     # -------------------------------------------------------------------------
+
+    def _reload_presets_catalog(self) -> None:
+        builtins = get_builtin_presets()
+        self._builtin_preset_names = set(builtins.keys())
+        customs = load_custom_presets()
+        merged = dict(builtins)
+        merged.update(customs)
+        self.presets = merged
+        if hasattr(self, "preset_menu"):
+            self.preset_menu.configure(values=list(self.presets.keys()))
+
+    def action_save_custom_preset(self, preset_name: str | None = None) -> bool:
+        if self.ui_mode_var.get() == "Simple":
+            task_key = _LABEL_TO_SIMPLE_TASK.get(self.simple_task_var.get(), "sequence")
+            if task_key == "clicker" and not self._apply_simple_clicker_to_profile(record_undo=False):
+                return False
+            if task_key == "spammer" and not self._apply_simple_spammer_to_profile(record_undo=False):
+                return False
+        elif not self.sync_ui_settings_to_profile():
+            return False
+
+        chosen = preset_name
+        if chosen is None:
+            current_name = self.profile.name.strip()
+            auto_named = (
+                not current_name
+                or current_name in self._builtin_preset_names
+                or current_name == "Custom Profile"
+                or current_name.startswith(("Auto-Clicker", "Key Spammer", "Untitled"))
+            )
+            if not auto_named:
+                chosen = current_name
+            else:
+                dlg = ctk.CTkInputDialog(
+                    text="Enter a name for your custom preset:",
+                    title="Save Custom Preset",
+                )
+                chosen = dlg.get_input()
+
+        if chosen is None or not chosen.strip():
+            if preset_name is not None:
+                self.show_toast("Preset name cannot be empty.", level="warning")
+            return False
+
+        cleaned_name = chosen.strip()[:100]
+        self.profile.name = cleaned_name
+        save_custom_preset(self.profile)
+        self._reload_presets_catalog()
+        self.preset_var.set(cleaned_name)
+        self._log_event(f"Saved custom preset: {cleaned_name}")
+        self.show_toast(f"Saved preset '{cleaned_name}'.", level="success")
+        return True
+
+    def action_delete_custom_preset(self, preset_name: str | None = None) -> bool:
+        target = (preset_name or self.preset_var.get()).strip()
+        if not target:
+            return False
+        if target in self._builtin_preset_names:
+            self.show_toast("Built-in presets cannot be deleted.", level="warning")
+            return False
+        if not delete_custom_preset(target):
+            self.show_toast(f"Custom preset '{target}' not found.", level="warning")
+            return False
+        self._reload_presets_catalog()
+        if self.presets:
+            first_key = next(iter(self.presets.keys()))
+            self.preset_var.set(first_key)
+        self._log_event(f"Deleted custom preset: {target}")
+        self.show_toast(f"Deleted custom preset '{target}'.", level="info")
+        return True
 
     def load_preset(self, preset_name: str) -> None:
         if self.executor.is_running:
@@ -2907,6 +3108,77 @@ class KeyForgeApp(ctk.CTk):
             self.executor.panic_abort()
 
     # -------------------------------------------------------------------------
+    # Compact Floating Mini-HUD Mode
+    # -------------------------------------------------------------------------
+
+    def enter_mini_hud_mode(self) -> None:
+        """Minimize the full Studio/Simple window and show an always-on-top floating HUD pill."""
+        if self._closing:
+            return
+        if self._mini_hud is not None and not self._mini_hud._closed:
+            with contextlib.suppress(Exception):
+                if self._mini_hud.winfo_exists():
+                    self._mini_hud.lift()
+                    return
+        self.withdraw()
+        self._mini_hud = MiniHudWindow(self)
+        self._sync_mini_hud()
+
+    def exit_mini_hud_mode(self) -> None:
+        """Close the floating Mini-HUD pill and restore the main KeyForge window."""
+        if self._mini_hud is not None:
+            self._mini_hud.close_hud()
+            self._mini_hud = None
+        if not self._closing:
+            with contextlib.suppress(Exception):
+                if self.winfo_exists():
+                    self.deiconify()
+                    self.lift()
+
+    def toggle_mini_hud_mode(self) -> None:
+        """Toggle between full desktop mode and the always-on-top Mini-HUD pill."""
+        if self._mini_hud is not None and not self._mini_hud._closed:
+            self.exit_mini_hud_mode()
+        else:
+            self.enter_mini_hud_mode()
+
+    def _sync_mini_hud(self) -> None:
+        if self._mini_hud is None or self._mini_hud._closed:
+            return
+        telem: ExecutionTelemetry = self.executor.telemetry
+        counting_down = self._countdown_after_id is not None or self._countdown_remaining_ms > 0
+        if self.executor.is_running:
+            state_text = "● RUNNING"
+            state_color = ACCENT_PRIMARY
+            is_active = True
+        elif counting_down:
+            state_text = f"⏳ {self._countdown_remaining_ms / 1000.0:.1f}s"
+            state_color = ACCENT_WARNING
+            is_active = True
+        elif telem.state == ExecutorState.PANIC_ABORTED:
+            state_text = "● ABORTED"
+            state_color = ACCENT_DANGER
+            is_active = False
+        elif telem.state == ExecutorState.ERROR:
+            state_text = "● ERROR"
+            state_color = ACCENT_DANGER
+            is_active = False
+        else:
+            state_text = "● READY"
+            state_color = ACCENT_SUCCESS
+            is_active = False
+
+        cycles_text = f"{telem.cycles_completed} cycles"
+        self._mini_hud.update_state(
+            state_text=state_text,
+            state_color=state_color,
+            cycles_text=cycles_text,
+            is_active=is_active,
+            start_hk=self.profile.start_stop_hotkey,
+            panic_hk=self.profile.panic_hotkey,
+        )
+
+    # -------------------------------------------------------------------------
     # Background Hotkey & Dirty-Checked Telemetry Loop
     # -------------------------------------------------------------------------
 
@@ -2983,7 +3255,9 @@ class KeyForgeApp(ctk.CTk):
 
     def _update_run_button_ui(self) -> None:
         running = self.executor.is_running
-        key_state = (running, self.profile.start_stop_hotkey)
+        counting_down = not running and (self._countdown_after_id is not None or self._countdown_remaining_ms > 0)
+        countdown_step = self._countdown_remaining_ms if counting_down else 0
+        key_state = (running, counting_down, countdown_step, self.profile.start_stop_hotkey)
         if self._tick_cache.get("run_btn") != key_state:
             self._tick_cache["run_btn"] = key_state
             if running:
@@ -2991,6 +3265,13 @@ class KeyForgeApp(ctk.CTk):
                     text=f"⏹ STOP MACRO ({self.profile.start_stop_hotkey})",
                     fg_color=ACCENT_DANGER,
                     hover_color=ACCENT_DANGER_HOVER,
+                )
+            elif counting_down:
+                rem_s = countdown_step / 1000.0
+                self.run_toggle_btn.configure(
+                    text=f"⏳ Starting in {rem_s:.1f}s... ({self.profile.start_stop_hotkey})",
+                    fg_color=ACCENT_WARNING,
+                    hover_color=ACCENT_WARNING_HOVER,
                 )
             else:
                 self.run_toggle_btn.configure(
@@ -3007,12 +3288,20 @@ class KeyForgeApp(ctk.CTk):
                     fg_color=ACCENT_DANGER,
                     hover_color=ACCENT_DANGER_HOVER,
                 )
+            elif counting_down:
+                rem_s = countdown_step / 1000.0
+                self.simple_run_btn.configure(
+                    text=f"⏳ Starting in {rem_s:.1f}s... ({self.profile.start_stop_hotkey})",
+                    fg_color=ACCENT_WARNING,
+                    hover_color=ACCENT_WARNING_HOVER,
+                )
             else:
                 self.simple_run_btn.configure(
                     text=f"▶ Start Macro ({self.profile.start_stop_hotkey})",
                     fg_color=CTA_SUCCESS,
                     hover_color=CTA_SUCCESS_HOVER,
                 )
+        self._sync_mini_hud()
 
     def _schedule_ui_tick(self) -> None:
         if self._closing:
@@ -3116,6 +3405,7 @@ class KeyForgeApp(ctk.CTk):
             if self._active_step_id and self._active_step_id in self._step_row_frames:
                 self._step_row_frames[self._active_step_id].configure(fg_color=BG_CARD_ACTIVE)
 
+        self._sync_mini_hud()
         return is_running
 
     def _log_event(self, message: str) -> None:
@@ -3138,6 +3428,11 @@ class KeyForgeApp(ctk.CTk):
                     self._update_dialog._on_close()
             self._update_dialog = None
 
+        if self._mini_hud is not None:
+            with contextlib.suppress(Exception):
+                self._mini_hud.close_hud()
+            self._mini_hud = None
+
         for after_attr in (
             "_ui_tick_after_id",
             "_startup_update_after_id",
@@ -3146,6 +3441,7 @@ class KeyForgeApp(ctk.CTk):
             "_filter_after_id",
             "_simple_slider_after_id",
             "_toast_after_id",
+            "_countdown_after_id",
             "_kf_icon_after_id",
         ):
             after_id = getattr(self, after_attr, None)

@@ -8,11 +8,13 @@ import ctypes
 import io
 import sys
 from collections.abc import Sequence
+from pathlib import Path
 
 from keyforge import __version__
 from keyforge.engine.backend import DryRunBackend
 from keyforge.engine.executor import MacroExecutor
 from keyforge.engine.win32_input import Win32InputBackend
+from keyforge.installer import install_keyforge, is_running_as_setup_installer, uninstall_keyforge
 from keyforge.models.dsl import format_actions_to_dsl, parse_quick_expression
 from keyforge.models.profile import MacroProfile, RepeatMode, create_default_profile
 from keyforge.security.auditor import audit_profile
@@ -100,11 +102,47 @@ def build_arg_parser() -> argparse.ArgumentParser:
         default=None,
         help="Export the default signed starter profile to the given file path and exit.",
     )
+    parser.add_argument(
+        "--setup",
+        action="store_true",
+        help="Launch the KeyForge Setup Installer GUI.",
+    )
+    parser.add_argument(
+        "--install",
+        action="store_true",
+        help="Install KeyForge to the local user programs directory (supports --silent).",
+    )
+    parser.add_argument(
+        "--uninstall",
+        action="store_true",
+        help="Uninstall KeyForge (preserves user configs/macros unless --purge-data is passed).",
+    )
+    parser.add_argument(
+        "--silent",
+        action="store_true",
+        help="Run --install or --uninstall headlessly without opening a wizard window.",
+    )
+    parser.add_argument(
+        "--purge-data",
+        action="store_true",
+        help="Remove saved configs, custom presets, and active profile during --uninstall.",
+    )
+    parser.add_argument(
+        "--no-desktop-shortcut",
+        action="store_true",
+        help="Skip creating a Desktop shortcut during --install.",
+    )
+    parser.add_argument(
+        "--install-dir",
+        type=str,
+        default=None,
+        help="Optional custom installation directory for --install or --uninstall.",
+    )
     return parser
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    """Main entrypoint supporting both Desktop GUI and headless CLI modes."""
+    """Main entrypoint supporting Setup Installer, Desktop GUI, and headless CLI modes."""
     effective_argv = list(sys.argv[1:] if argv is None else argv)
     _ensure_standard_streams(has_cli_args=bool(effective_argv))
 
@@ -116,6 +154,36 @@ def main(argv: Sequence[str] | None = None) -> int:
         profile = create_default_profile()
         target = save_profile_secure(profile, args.export_default)
         print(f"Exported signed default profile to: {target}")
+        return 0
+
+    custom_install_dir = Path(args.install_dir) if args.install_dir else None
+
+    # 2. Setup / Install / Uninstall modes
+    if args.install and args.silent:
+        manifest = install_keyforge(
+            install_dir=custom_install_dir,
+            create_desktop_shortcut=not args.no_desktop_shortcut,
+            create_start_menu_shortcut=True,
+            register_uninstaller=True,
+        )
+        print(f"Installed KeyForge v{__version__} to: {manifest['installed_exe']}")
+        return 0
+
+    if args.uninstall and args.silent:
+        result = uninstall_keyforge(
+            install_dir=custom_install_dir,
+            purge_user_data=bool(args.purge_data),
+            spawn_self_delete=True,
+        )
+        print(f"Uninstalled KeyForge from: {result['uninstalled_dir']} (purged_user_data={result['purged_user_data']})")
+        return 0
+
+    if args.uninstall or args.install or args.setup:
+        _hide_transient_console_on_windows()
+        from keyforge.ui.installer_dialog import InstallerWindow
+
+        wizard_mode = "uninstall" if args.uninstall else "setup"
+        InstallerWindow(mode=wizard_mode, install_dir=custom_install_dir).mainloop()
         return 0
 
     # 2. Headless CLI mode (--expr, --profile, or --audit)
@@ -161,7 +229,15 @@ def main(argv: Sequence[str] | None = None) -> int:
             print(f"Error: {exc}", file=sys.stderr)
             return 1
 
-    # 3. Default: Launch Desktop GUI (with zero background terminal window)
+    # 3. Auto-detect compiled Setup installer binary when launched directly
+    if is_running_as_setup_installer():
+        _hide_transient_console_on_windows()
+        from keyforge.ui.installer_dialog import InstallerWindow
+
+        InstallerWindow(mode="setup", install_dir=custom_install_dir).mainloop()
+        return 0
+
+    # 4. Default: Launch Desktop GUI (with zero background terminal window)
     _hide_transient_console_on_windows()
     from keyforge.ui.app import KeyForgeApp
 

@@ -235,6 +235,8 @@ def _select_platform_asset(
             if not cand_suffix and asset_lower.endswith(".exe"):
                 continue
             tokens = _tokenize_asset_name(asset_name)
+            if tokens & {"setup", "installer", "uninstall"}:
+                continue
             if tokens & forbidden_os or tokens & forbidden_arch:
                 continue
             if (tokens & os_aliases[want_os]) and (tokens & arch_aliases[want_arch]):

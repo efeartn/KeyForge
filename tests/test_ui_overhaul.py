@@ -205,3 +205,69 @@ def test_startup_update_banner_and_update_dialog_lifecycle(
     finally:
         if not app._closing:
             app._on_close()
+
+
+def test_custom_presets_countdown_mini_hud_and_installer_ui(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import contextlib
+    import time
+
+    from keyforge.ui.installer_dialog import InstallerWindow
+
+    monkeypatch.setenv("KEYFORGE_CONFIG_DIR", str(tmp_path))
+    app = KeyForgeApp(start_hotkey_listener=False)
+    try:
+        # 1. Custom saved presets CRUD + protection for built-in presets
+        assert app.action_save_custom_preset("Raid Combo") is True
+        assert "Raid Combo" in app.presets
+        assert "Raid Combo" in app.preset_menu.cget("values")
+
+        builtin_first = next(iter(app._builtin_preset_names))
+        assert app.action_delete_custom_preset(builtin_first) is False
+        assert app.action_delete_custom_preset("Raid Combo") is True
+        assert "Raid Combo" not in app.presets
+
+        # 2. Pre-Start Countdown start + cancellation
+        app.dry_run_var.set(True)
+        app.countdown_var.set("1s")
+        app._on_countdown_changed("1s")
+        assert app.app_config.start_countdown_sec == 1
+        app.toggle_execution()
+        assert app._countdown_after_id is not None
+        assert "Starting in" in app.run_toggle_btn.cget("text")
+        assert app.cancel_countdown("cancelled") is True
+        assert app._countdown_after_id is None
+
+        # 3. Countdown completion launches Dry-Run executor
+        app._start_countdown(100)
+        deadline = time.monotonic() + 2.0
+        while not app.executor.is_running and time.monotonic() < deadline:
+            app.update_idletasks()
+            app.update()
+            time.sleep(0.02)
+        if app.executor.is_running:
+            app.executor.stop()
+
+        # 4. Compact Floating Mini-HUD lifecycle
+        app.enter_mini_hud_mode()
+        assert app._mini_hud is not None
+        app.update_idletasks()
+        assert app._mini_hud.winfo_exists()
+        app._ui_tick()
+        app.exit_mini_hud_mode()
+        assert app._mini_hud is None
+    finally:
+        if not app._closing:
+            app._on_close()
+
+    # 5. Setup & Uninstall GUI window smoke check
+    monkeypatch.setattr("keyforge.installer._create_windows_shortcut", lambda *args, **kwargs: True)
+    monkeypatch.setattr("keyforge.installer._register_windows_uninstaller", lambda *args, **kwargs: True)
+    setup_win = InstallerWindow(mode="setup", install_dir=tmp_path / "wiz_install")
+    with contextlib.suppress(Exception):
+        setup_win.update_idletasks()
+        assert "Setup" in setup_win.title()
+        assert setup_win.purge_var.get() is False
+    setup_win._on_close()

@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import os
 import platform
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -69,6 +70,16 @@ def build_executable() -> int:
         checksum_file.write_text(checksum_line, encoding="utf-8")
         print(f"Built artifact: {built_binary} ({built_binary.stat().st_size} bytes)")
         print(f"SHA-256: {checksum_line.strip()}")
+
+        if sys.platform == "win32":
+            setup_name = "KeyForge-Setup-Windows-x64"
+            setup_binary = dist_dir / f"{setup_name}.exe"
+            shutil.copy2(built_binary, setup_binary)
+            setup_digest = hashlib.sha256(setup_binary.read_bytes()).hexdigest()
+            setup_checksum_line = f"{setup_digest}  {setup_binary.name}\n"
+            (dist_dir / f"{setup_name}.sha256.txt").write_text(setup_checksum_line, encoding="utf-8")
+            print(f"Built Setup installer: {setup_binary} ({setup_binary.stat().st_size} bytes)")
+            print(f"SHA-256: {setup_checksum_line.strip()}")
 
     return 0
 

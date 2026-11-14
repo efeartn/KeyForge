@@ -24,11 +24,14 @@ from keyforge.config import (
     MAX_CONFIG_FILE_BYTES,
     AppConfig,
     _is_unisolated_pytest_run,
+    delete_custom_preset,
     get_config_dir,
     load_active_profile_backup,
     load_app_config,
+    load_custom_presets,
     save_active_profile_backup,
     save_app_config,
+    save_custom_preset,
 )
 from keyforge.models.action import ClickType, MouseButton, make_key_press, make_mouse_click, make_wait
 from keyforge.models.profile import MacroProfile, RepeatMode, create_default_profile
@@ -906,3 +909,99 @@ def test_build_windows_hotswap_script_and_dry_run_powershell_ast(
             "TargetExe": str(real_target),
             "BackupExe": f"{real_target}.old",
         }
+
+
+def test_installer_install_and_uninstall_preserves_user_data(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from keyforge.installer import install_keyforge, is_running_as_setup_installer, uninstall_keyforge
+    from keyforge.main import main
+
+    cfg_dir = tmp_path / "user_config"
+    install_dir = tmp_path / "programs" / "KeyForge"
+    monkeypatch.setenv("KEYFORGE_CONFIG_DIR", str(cfg_dir))
+    monkeypatch.setenv("KEYFORGE_INSTALL_DIR", str(install_dir))
+
+    monkeypatch.setattr("keyforge.installer._create_windows_shortcut", lambda *args, **kwargs: True)
+    monkeypatch.setattr("keyforge.installer._register_windows_uninstaller", lambda *args, **kwargs: True)
+    monkeypatch.setattr("keyforge.installer._unregister_windows_uninstaller", lambda *args, **kwargs: None)
+
+    # Seed user configuration, active profile, and a custom preset before installing/uninstalling
+    save_app_config(AppConfig(ui_mode="studio", start_countdown_sec=3), custom_dir=cfg_dir)
+    profile = create_default_profile()
+    save_active_profile_backup(profile, custom_dir=cfg_dir)
+    save_custom_preset(profile, custom_dir=cfg_dir)
+
+    src_bin = tmp_path / "KeyForge-Setup-Windows-x64.exe"
+    src_bin.write_bytes(b"MZ-KEYFORGE-BINARY")
+
+    manifest = install_keyforge(install_dir=install_dir, source_exe=src_bin)
+    installed_exe = Path(manifest["installed_exe"])
+    assert installed_exe.is_file()
+    assert installed_exe.read_bytes() == b"MZ-KEYFORGE-BINARY"
+    assert (install_dir / "install_manifest.json").is_file()
+
+    # Uninstall with default purge_user_data=False keeps user config, profile & custom preset intact
+    res_keep = uninstall_keyforge(install_dir=install_dir, purge_user_data=False, spawn_self_delete=False)
+    assert res_keep["purged_user_data"] is False
+    assert not install_dir.exists()
+    assert (cfg_dir / CONFIG_FILENAME).is_file()
+    assert (cfg_dir / ACTIVE_PROFILE_FILENAME).is_file()
+    assert load_app_config(cfg_dir).start_countdown_sec == 3
+
+    # CLI headless --install --silent & --uninstall --silent (--purge-data)
+    cli_dir = tmp_path / "cli_install"
+    assert main(["--install", "--silent", "--install-dir", str(cli_dir), "--no-desktop-shortcut"]) == 0
+    assert (cli_dir / "install_manifest.json").is_file()
+    assert main(["--uninstall", "--silent", "--install-dir", str(cli_dir), "--purge-data"]) == 0
+    assert not cli_dir.exists()
+    assert not cfg_dir.exists()
+
+    # Detect frozen Setup installer binary name cleanly
+    monkeypatch.setattr(sys, "frozen", True, raising=False)
+    assert is_running_as_setup_installer("C:/Downloads/KeyForge-Setup-Windows-x64.exe") is True
+    assert is_running_as_setup_installer("C:/Apps/KeyForge-Windows-x64.exe") is False
+    monkeypatch.setattr(sys, "frozen", False, raising=False)
+    assert is_running_as_setup_installer("C:/Downloads/KeyForge-Setup-Windows-x64.exe") is False
+
+
+def test_select_platform_asset_ignores_setup_installer() -> None:
+    setup_only = [
+        {"name": "KeyForge-Windows-Setup-x64.exe", "browser_download_url": "https://example.com/setup.exe"},
+    ]
+    assert _select_platform_asset(setup_only, get_platform_asset_candidates("Windows", "AMD64")) is None
+
+    mixed_versioned = [
+        {"name": "KeyForge-Windows-v1.3.0-Setup-x64.exe", "browser_download_url": "https://example.com/setup.exe"},
+        {"name": "KeyForge-Windows-v1.3.0-x64.exe", "browser_download_url": "https://example.com/portable.exe"},
+    ]
+    picked = _select_platform_asset(mixed_versioned, get_platform_asset_candidates("Windows", "AMD64"))
+    assert picked is not None
+    assert picked["name"] == "KeyForge-Windows-v1.3.0-x64.exe"
+
+
+def test_custom_presets_save_load_delete_and_countdown_config(tmp_path: Path) -> None:
+    cfg = AppConfig(start_countdown_sec=3)
+    save_app_config(cfg, custom_dir=tmp_path)
+    assert load_app_config(tmp_path).start_countdown_sec == 3
+    assert AppConfig(start_countdown_sec=-5).start_countdown_sec == 0
+    assert AppConfig(start_countdown_sec=99).start_countdown_sec == 10
+
+    preset = MacroProfile(
+        name="Farm Combo v2!",
+        description="Custom test loop",
+        repeat_mode=RepeatMode.COUNT,
+        repeat_count=4,
+        actions=[make_key_press("F"), make_wait(80), make_mouse_click(MouseButton.LEFT, ClickType.SINGLE)],
+    )
+    saved_path = save_custom_preset(preset, custom_dir=tmp_path)
+    assert saved_path.is_file()
+
+    customs = load_custom_presets(custom_dir=tmp_path)
+    assert "Farm Combo v2!" in customs
+    assert len(customs["Farm Combo v2!"].actions) == 3
+
+    assert delete_custom_preset("Farm Combo v2!", custom_dir=tmp_path) is True
+    assert delete_custom_preset("Farm Combo v2!", custom_dir=tmp_path) is False
+    assert load_custom_presets(custom_dir=tmp_path) == {}

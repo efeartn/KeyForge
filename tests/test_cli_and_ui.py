@@ -174,6 +174,7 @@ def test_gui_controller_lifecycle(tmp_path: Path) -> None:
             "_filter_after_id",
             "_simple_slider_after_id",
             "_toast_after_id",
+            "_countdown_after_id",
         ):
             assert getattr(app, timer_attr) is None
         assert getattr(app, "_kf_icon_after_id", None) is None
@@ -214,7 +215,7 @@ def test_version_parity_and_cli_version_flag() -> None:
     pyproject_data = tomllib.loads(pyproject_path.read_text(encoding="utf-8"))
     project_version = pyproject_data["project"]["version"]
 
-    assert __version__ == "1.2.0"
+    assert __version__ == "1.3.0"
     assert __version__ == project_version
     assert USER_AGENT == f"KeyForge/{__version__}"
 

@@ -39,8 +39,9 @@ KeyForge is built from the ground up with a **Security-First Architecture** desi
 - **Mitigation**:
   - Profile paths are canonicalized with `Path.resolve()`, verified against null bytes, restricted to `.json` / `.kfmacro.json` extensions, and written atomically via temporary file swap.
 
-### 1.6 Zero Telemetry & SHA-256 Verified Auto-Updater
+### 1.6 Zero Telemetry, Verified Setup Installer & SHA-256 Auto-Updater
 - KeyForge collects **zero analytics, usage telemetry, advertising SDKs, or third-party tracking**.
+- KeyForge's Windows Setup Installer (`KeyForge-Setup-Windows-x64.exe` / `keyforge.installer`) installs strictly into per-user AppData (`%LOCALAPPDATA%\Programs\KeyForge`) without requiring elevated Administrator privileges, preserves all configs and saved macros across upgrades and default uninstalls, and never fetches unverified binaries from third-party mirrors.
 - To protect against supply-chain tampering, KeyForge's built-in updater (`keyforge.updater`):
   - Contacts only the official GitHub Releases API over **HTTPS** (`https://api.github.com/repos/efeartn/KeyForge/releases/latest`) and rejects insecure `http://` redirects or unsupported schemes.
   - Verifies the downloaded executable stream using constant-time **SHA-256 (`hmac.compare_digest`)** against the release `.sha256.txt` digest before allowing replacement.

@@ -14,7 +14,7 @@ Free, Open-Source (`GPL-3.0`), Cybersecurity-Hardened, and Native for Windows, m
 [![Security: SHA-256 Signed + Static Auditor](https://img.shields.io/badge/Security-SHA--256%20Verified%20%2B%20Static%20Auditor-10B981)](SECURITY.md)
 [![License: GPL-3.0](https://img.shields.io/badge/License-GPL--3.0-8B5CF6.svg)](LICENSE)
 
-[**Download v1.2.0**](#download-standalone-executables) • [**Visual Tour**](#visual-tour) • [**Auto-Updater & Config**](#auto-updater--persistent-configuration) • [**Quick-Forge DSL**](#quick-forge-recipe-dsl-reference) • [**Cybersecurity**](#cybersecurity--safety-engineering) • [**CLI & Source**](#installation--quick-start)
+[**Download v1.3.0**](#download-standalone-executables) • [**Visual Tour**](#visual-tour) • [**Setup Installer & Updater**](#windows-setup-installer--auto-updater) • [**Quick-Forge DSL**](#quick-forge-recipe-dsl-reference) • [**Cybersecurity**](#cybersecurity--safety-engineering) • [**CLI & Source**](#installation--quick-start)
 
 </div>
 
@@ -25,7 +25,7 @@ Free, Open-Source (`GPL-3.0`), Cybersecurity-Hardened, and Native for Windows, m
 <div align="center">
   <img src="docs/screenshots/studio_mode.png" alt="KeyForge Studio Mode Dark Titanium Desktop Interface" width="100%" />
   <br />
-  <sub><b>Studio Mode</b> — Bento execution telemetry strip, live Quick-Forge DSL bar, color-coded visual timeline cards, repeat/hotkey inspector, and hardware Panic Stop (<code>F12</code>).</sub>
+  <sub><b>Studio Mode (v1.3.0)</b> — Custom saved presets library (<code>+ Preset</code>), pre-start countdown selector (<code>0s–5s</code>), always-on-top <b>Mini HUD</b> toggle, live Quick-Forge DSL bar, color-coded visual timeline cards, and hardware Panic Stop (<code>F12</code>).</sub>
 </div>
 
 ---
@@ -45,10 +45,33 @@ KeyForge adapts smoothly from beginner one-click automation to full multi-step m
       <h3>Everyday Automation in One Screen</h3>
       <ul>
         <li><b>Two Live Modes:</b> Toggle between <b>Simple</b> (Auto-Clicker, Key Spammer, Quick Sequence) and <b>Studio</b> (full visual timeline) with live bidirectional profile syncing.</li>
-        <li><b>Humanized Precision:</b> Toggle <code>±10%</code> random timing variance directly from Simple Mode so automated clicks and keystrokes never look robotic.</li>
+        <li><b>Pre-Start Countdown Timer:</b> Choose a <code>0s</code>, <code>1s</code>, <code>3s</code>, or <code>5s</code> Start Delay so you have time to focus your target game or app window before inputs begin.</li>
+        <li><b>Custom Presets Library:</b> Save your favorite Simple or Studio setups with <code>+ Preset</code> into the top preset selector across restarts.</li>
         <li><b>Built for Older &amp; Low-RAM PCs:</b> Native <code>CustomTkinter</code> + <code>Pillow</code> UI with zero Chromium/WebView runtime overhead and responsive <code>1280×720</code> High-DPI sizing.</li>
-        <li><b>Zero Guesswork Controls:</b> Clear Start (<code>F6</code>), Panic Stop (<code>F12</code>), Dry-Run Simulation toggle, and startup update toggle.</li>
       </ul>
+    </td>
+  </tr>
+</table>
+
+### Floating Mini-HUD & Setup Installer Wizard
+
+<table>
+  <tr>
+    <td width="50%" valign="top" align="center">
+      <br />
+      <img src="docs/screenshots/mini_hud.png" alt="KeyForge Always-on-Top Compact Floating Mini-HUD Pill" width="90%" />
+      <br /><br />
+      <p align="left">
+        <b>Compact Always-on-Top Mini-HUD</b><br />
+        Click <b>Mini HUD</b> in the header bar to collapse KeyForge into a slim floating control pill that stays above games or desktop workflows with live cycle telemetry, Start/Stop (<code>F6</code>), Panic (<code>F12</code>), and one-click <b>Expand</b>.
+      </p>
+    </td>
+    <td width="50%" valign="top" align="center">
+      <img src="docs/screenshots/setup_installer.png" alt="KeyForge v1.3.0 Setup Installer Wizard" width="90%" />
+      <p align="left">
+        <b>Windows Setup Installer &amp; Uninstaller</b><br />
+        Run <code>KeyForge-Setup-Windows-x64.exe</code> to install per-user without admin UAC prompts, create Desktop &amp; Start Menu shortcuts, register Windows Uninstall cleanly, and keep configs &amp; saved macros safe on uninstall unless opted out.
+      </p>
     </td>
   </tr>
 </table>
@@ -88,17 +111,19 @@ KeyForge adapts smoothly from beginner one-click automation to full multi-step m
 
 Every tagged release is compiled, tested on Python 3.11–3.13 across all OS targets, and published by [GitHub Actions](https://github.com/efeartn/KeyForge/actions) alongside individual checksums and a combined [`SHA256SUMS.txt`](https://github.com/efeartn/KeyForge/releases/latest/download/SHA256SUMS.txt):
 
-| Operating System | Architecture | Standalone Binary | Checksum Manifest |
+| Operating System | Variant | Standalone Binary | Checksum Manifest |
 | :--- | :--- | :--- | :--- |
-| **Windows 10 / 11** | `x64` | [**`KeyForge-Windows-x64.exe`**](https://github.com/efeartn/KeyForge/releases/latest/download/KeyForge-Windows-x64.exe) | [`KeyForge-Windows-x64.exe.sha256.txt`](https://github.com/efeartn/KeyForge/releases/latest/download/KeyForge-Windows-x64.exe.sha256.txt) |
-| **macOS** | `Apple Silicon (arm64)` | [**`KeyForge-macOS-arm64`**](https://github.com/efeartn/KeyForge/releases/latest/download/KeyForge-macOS-arm64) | [`KeyForge-macOS-arm64.sha256.txt`](https://github.com/efeartn/KeyForge/releases/latest/download/KeyForge-macOS-arm64.sha256.txt) |
-| **Linux** | `x86_64` | [**`KeyForge-Linux-x64`**](https://github.com/efeartn/KeyForge/releases/latest/download/KeyForge-Linux-x64) | [`KeyForge-Linux-x64.sha256.txt`](https://github.com/efeartn/KeyForge/releases/latest/download/KeyForge-Linux-x64.sha256.txt) |
+| **Windows 10 / 11** (`x64`) | **Setup Installer** (Shortcuts + Uninstaller) | [**`KeyForge-Setup-Windows-x64.exe`**](https://github.com/efeartn/KeyForge/releases/latest/download/KeyForge-Setup-Windows-x64.exe) | [`KeyForge-Setup-Windows-x64.sha256.txt`](https://github.com/efeartn/KeyForge/releases/latest/download/KeyForge-Setup-Windows-x64.sha256.txt) |
+| **Windows 10 / 11** (`x64`) | **Portable Single-File** | [**`KeyForge-Windows-x64.exe`**](https://github.com/efeartn/KeyForge/releases/latest/download/KeyForge-Windows-x64.exe) | [`KeyForge-Windows-x64.sha256.txt`](https://github.com/efeartn/KeyForge/releases/latest/download/KeyForge-Windows-x64.sha256.txt) |
+| **macOS** (`arm64`) | **Apple Silicon Standalone** | [**`KeyForge-macOS-arm64`**](https://github.com/efeartn/KeyForge/releases/latest/download/KeyForge-macOS-arm64) | [`KeyForge-macOS-arm64.sha256.txt`](https://github.com/efeartn/KeyForge/releases/latest/download/KeyForge-macOS-arm64.sha256.txt) |
+| **Linux** (`x86_64`) | **Standalone ELF Binary** | [**`KeyForge-Linux-x64`**](https://github.com/efeartn/KeyForge/releases/latest/download/KeyForge-Linux-x64) | [`KeyForge-Linux-x64.sha256.txt`](https://github.com/efeartn/KeyForge/releases/latest/download/KeyForge-Linux-x64.sha256.txt) |
 
 <details>
 <summary><b>Verify Binary Checksum Before Running (Optional)</b></summary>
 
 ```powershell
 # Windows (PowerShell)
+Get-FileHash .\KeyForge-Setup-Windows-x64.exe -Algorithm SHA256
 Get-FileHash .\KeyForge-Windows-x64.exe -Algorithm SHA256
 ```
 
@@ -114,20 +139,26 @@ sha256sum -c KeyForge-Linux-x64.sha256.txt && chmod +x KeyForge-Linux-x64
 
 ---
 
-## Auto-Updater & Persistent Configuration
+## Windows Setup Installer & Auto-Updater
 
-When you upgrade KeyForge from inside the app or launch a newer standalone binary, your hotkeys, UI mode, Auto-Clicker / Key Spammer sliders, window geometry, and active macro profile stay completely intact.
+### Safe Setup & Uninstaller (Preserves User Data by Default)
+- **Zero-Elevation Per-User Install**: Installs to `%LOCALAPPDATA%\Programs\KeyForge\KeyForge.exe`, creates optional Desktop & Start Menu shortcuts, and registers **KeyForge** in Windows Apps & Features (`HKCU\...\Uninstall\KeyForge`).
+- **Uninstall Without Data Loss**: Running Uninstall leaves your `%APPDATA%\KeyForge` configuration, custom presets, and saved active macro profile untouched by default unless you explicitly opt in to delete them (`--purge-data`).
+- **Silent CLI Support**: Both Setup and Uninstall support headless flags (`--install --silent` and `--uninstall --silent [--purge-data]`).
+
+### Auto-Updater & Persistent Configuration
+
+When you upgrade KeyForge from inside the app or launch a newer standalone binary, your hotkeys, UI mode, Auto-Clicker / Key Spammer sliders, start delay, custom presets, window geometry, and active macro profile stay completely intact.
 
 - **Startup Release Check**: Background check on startup notifies you cleanly via a dismissible header banner and the **Updates** pill when a newer release exists on GitHub (can be toggled anytime with **Check for updates on startup**).
-- **Strict Transport & Hash Verification**: Enforces `HTTPS`-only GitHub redirects, matches binaries to the host OS/architecture, streams downloads atomically with progress reporting, and rejects any download whose `SHA-256` fails constant-time comparison against `SHA256SUMS.txt` / `.sha256.txt`.
-- **Safe Executable Hot-Swap & Rollback**: Stages upgrades safely without touching your user config folder; on Windows a lightweight swapper waits for process exit, preserves a rollback copy until launch succeeds, and restarts cleanly.
-- **Crash-Safe Config & Profile Storage** (atomic `fsync` + `.bak` fallback; overridable via `KEYFORGE_CONFIG_DIR`):
+- **Strict Transport & Hash Verification**: Enforces `HTTPS`-only GitHub redirects, matches portable binaries cleanly without confusing them for installers, streams downloads atomically with progress reporting, and rejects any download whose `SHA-256` fails constant-time comparison against `SHA256SUMS.txt` / `.sha256.txt`.
+- **Crash-Safe Config, Custom Presets & Profile Storage** (atomic `fsync` + `.bak` fallback; overridable via `KEYFORGE_CONFIG_DIR`):
 
 | Platform | Configuration Directory | Stored Files |
 | :--- | :--- | :--- |
-| **Windows** | `%APPDATA%\KeyForge` | `config.json`, `active_profile.kfmacro.json` (+ `.bak`) |
-| **macOS** | `~/Library/Application Support/KeyForge` | `config.json`, `active_profile.kfmacro.json` (+ `.bak`) |
-| **Linux / BSD** | `$XDG_CONFIG_HOME/KeyForge` (or `~/.config/KeyForge`) | `config.json`, `active_profile.kfmacro.json` (+ `.bak`) |
+| **Windows** | `%APPDATA%\KeyForge` | `config.json`, `active_profile.kfmacro.json` (+ `.bak`), `presets/` |
+| **macOS** | `~/Library/Application Support/KeyForge` | `config.json`, `active_profile.kfmacro.json` (+ `.bak`), `presets/` |
+| **Linux / BSD** | `$XDG_CONFIG_HOME/KeyForge` (or `~/.config/KeyForge`) | `config.json`, `active_profile.kfmacro.json` (+ `.bak`), `presets/` |
 
 ---
 
@@ -228,11 +259,14 @@ KeyForge/
 │   │   └── validator.py          # Allowlist Schema, Path & Complexity Budget Validator
 │   ├── ui/
 │   │   ├── app.py                # Dual Simple/Studio Dark Titanium Desktop GUI
+│   │   ├── installer_dialog.py   # Dark Titanium Windows Setup & Uninstaller Wizard
+│   │   ├── mini_hud.py           # Always-on-Top Floating Compact Control Pill
 │   │   ├── step_dialog.py        # Modal Step Inspector with Live Pick XY Capture
 │   │   ├── theme.py              # Dark Titanium Palette, High-DPI & Window Helpers
 │   │   └── update_dialog.py      # SHA-256 Verified GitHub Releases Update Sheet
-│   ├── config.py                 # Crash-Safe AppData/XDG Config & Active Profile Persistence
-│   ├── main.py                   # CLI & Desktop GUI Entry Point
+│   ├── config.py                 # Crash-Safe Config, Custom Presets & Active Profile Backup
+│   ├── installer.py              # Per-User Installer, Shortcuts & Uninstall Registry Manager
+│   ├── main.py                   # Setup Wizard, CLI & Desktop GUI Entry Point
 │   └── updater.py                # SemVer Client, SHA-256 Verifier & Atomic Hot-Swapper
 ├── scripts/build_exe.py          # Cross-Platform PyInstaller Compiler + SHA-256 Generator
 └── tests/                        # Unit, Security, Updater, Config, Engine, CLI & UI Tests
@@ -270,6 +304,11 @@ python -m keyforge --profile my_combo.kfmacro.json --audit
 
 # Execute a saved profile with live OS injection
 python -m keyforge --profile my_combo.kfmacro.json
+
+# Launch Setup / Install / Uninstall workflows
+python -m keyforge --setup
+python -m keyforge --install --silent
+python -m keyforge --uninstall --silent
 ```
 
 ### Compile a Standalone Binary & Run Tests

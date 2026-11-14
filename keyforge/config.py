@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import json
 import os
 import re
@@ -14,6 +15,7 @@ from typing import Any
 from keyforge.models.keymap import normalize_key_combo
 from keyforge.models.profile import MacroProfile
 from keyforge.security.integrity import (
+    load_profile_secure,
     parse_and_verify_envelope,
     save_profile_secure,
 )
@@ -23,7 +25,9 @@ CONFIG_FILENAME = "config.json"
 CONFIG_BACKUP_FILENAME = "config.json.bak"
 ACTIVE_PROFILE_FILENAME = "active_profile.kfmacro.json"
 ACTIVE_PROFILE_BACKUP_FILENAME = "active_profile.kfmacro.json.bak"
+PRESETS_DIRNAME = "presets"
 MAX_CONFIG_FILE_BYTES = 1_048_576  # 1 MiB safety limit
+_PRESET_FILENAME_SANITIZER = re.compile(r"[^A-Za-z0-9_ -]+")
 
 VALID_UI_MODES = ("simple", "studio")
 VALID_SIMPLE_TASKS = ("clicker", "spammer", "sequence")
@@ -183,6 +187,7 @@ class AppConfig:
     dry_run: bool = False
     check_updates_on_startup: bool = True
     auto_save_active_profile: bool = True
+    start_countdown_sec: int = 0
     last_profile_path: str | None = None
     simple_clicker: dict[str, Any] = field(default_factory=_default_simple_clicker)
     simple_spammer: dict[str, Any] = field(default_factory=_default_simple_spammer)
@@ -199,6 +204,7 @@ class AppConfig:
         self.dry_run = _coerce_bool(self.dry_run, False)
         self.check_updates_on_startup = _coerce_bool(self.check_updates_on_startup, True)
         self.auto_save_active_profile = _coerce_bool(self.auto_save_active_profile, True)
+        self.start_countdown_sec = _coerce_int(self.start_countdown_sec, 0, 0, 10)
         self.last_profile_path = _normalize_optional_str(self.last_profile_path)
         self.simple_clicker = _normalize_simple_clicker(self.simple_clicker)
         self.simple_spammer = _normalize_simple_spammer(self.simple_spammer)
@@ -217,6 +223,7 @@ class AppConfig:
             "dry_run": self.dry_run,
             "check_updates_on_startup": self.check_updates_on_startup,
             "auto_save_active_profile": self.auto_save_active_profile,
+            "start_countdown_sec": self.start_countdown_sec,
             "last_profile_path": self.last_profile_path,
             "simple_clicker": dict(self.simple_clicker),
             "simple_spammer": dict(self.simple_spammer),
@@ -239,6 +246,7 @@ class AppConfig:
             dry_run=data.get("dry_run", False),
             check_updates_on_startup=data.get("check_updates_on_startup", True),
             auto_save_active_profile=data.get("auto_save_active_profile", True),
+            start_countdown_sec=data.get("start_countdown_sec", 0),
             last_profile_path=data.get("last_profile_path"),
             simple_clicker=data.get("simple_clicker", _default_simple_clicker()),
             simple_spammer=data.get("simple_spammer", _default_simple_spammer()),
@@ -418,3 +426,70 @@ def load_active_profile_backup(custom_dir: Path | None = None) -> MacroProfile |
             continue
 
     return None
+
+
+def _slugify_preset_name(name: str) -> str:
+    cleaned = _PRESET_FILENAME_SANITIZER.sub("", name).strip().replace(" ", "_")[:60]
+    return cleaned or "custom_preset"
+
+
+def get_presets_dir(custom_dir: Path | None = None) -> Path:
+    """Return the directory storing custom saved macro presets."""
+    return get_config_dir(custom_dir) / PRESETS_DIRNAME
+
+
+def save_custom_preset(profile: MacroProfile, custom_dir: Path | None = None) -> Path:
+    """Validate and save a custom MacroProfile preset into the presets library folder."""
+    profile.validate()
+    presets_dir = get_presets_dir(custom_dir)
+    slug = _slugify_preset_name(profile.name)
+    target = presets_dir / f"{slug}.kfmacro.json"
+    if _is_unisolated_pytest_run(custom_dir):
+        return target
+    presets_dir.mkdir(parents=True, exist_ok=True)
+    return save_profile_secure(profile, target)
+
+
+def load_custom_presets(custom_dir: Path | None = None) -> dict[str, MacroProfile]:
+    """Load all valid custom presets from the presets library folder."""
+    if _is_unisolated_pytest_run(custom_dir):
+        return {}
+    presets_dir = get_presets_dir(custom_dir)
+    if not presets_dir.is_dir():
+        return {}
+
+    loaded: dict[str, MacroProfile] = {}
+    for path in sorted(presets_dir.glob("*.kfmacro.json")):
+        with contextlib.suppress(Exception):
+            profile, _sig_ok = load_profile_secure(path, require_signature=False)
+            loaded[profile.name] = profile
+    return loaded
+
+
+def delete_custom_preset(preset_name: str, custom_dir: Path | None = None) -> bool:
+    """Delete a custom saved preset by name. Returns True if removed."""
+    if _is_unisolated_pytest_run(custom_dir):
+        return False
+    if not isinstance(preset_name, str) or not preset_name.strip():
+        return False
+    presets_dir = get_presets_dir(custom_dir)
+    if not presets_dir.is_dir():
+        return False
+
+    target_slug = _slugify_preset_name(preset_name)
+    for path in sorted(presets_dir.glob("*.kfmacro.json")):
+        matched = False
+        try:
+            profile, _sig_ok = load_profile_secure(path, require_signature=False)
+            matched = profile.name == preset_name
+        except Exception:
+            matched = path.name == f"{target_slug}.kfmacro.json"
+        if matched:
+            path.unlink(missing_ok=True)
+            return True
+
+    fallback = presets_dir / f"{target_slug}.kfmacro.json"
+    if fallback.is_file():
+        fallback.unlink(missing_ok=True)
+        return True
+    return False
