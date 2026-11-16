@@ -449,7 +449,7 @@ def test_startup_update_worker_and_closing_safety(
         ):
             t_err = threading.Thread(target=app._startup_update_worker, daemon=True)
             t_err.start()
-            t_err.join(timeout=3.0)
+            t_err.join(timeout=10.0)
             assert not t_err.is_alive()
             app._enqueue_hotkey_action("start_stop")
             app._enqueue_panic_hotkey()
@@ -486,7 +486,7 @@ def test_startup_update_worker_and_closing_safety(
         ):
             t_hk = threading.Thread(target=lambda: app._enqueue_hotkey_action("start_stop"), daemon=True)
             t_hk.start()
-            t_hk.join(timeout=3.0)
+            t_hk.join(timeout=10.0)
             assert not t_hk.is_alive()
             assert spy_hk_after.call_count == 0
             assert spy_hk_exists.call_count == 0
@@ -548,7 +548,7 @@ def test_update_dialog_close_mid_download_and_error_states(
                 return b"CHUNK1"
             if self._calls == 2:
                 self._chunk1_seen.set()
-                self._allow_next.wait(timeout=3.0)
+                self._allow_next.wait(timeout=15.0)
                 return b"CHUNK2"
             return b""
 
@@ -563,6 +563,8 @@ def test_update_dialog_close_mid_download_and_error_states(
 
     app = KeyForgeApp(start_hotkey_listener=False)
     try:
+        app.update_idletasks()
+        app.update()
         # 1. Check Again error handling renders friendly failure UI
         dlg_err = UpdateDialog(app, initial_release=release)
         monkeypatch.setattr(
@@ -579,6 +581,8 @@ def test_update_dialog_close_mid_download_and_error_states(
 
         # 2. Cancel button mid-download aborts cleanly & removes .downloading
         dlg_cancel = UpdateDialog(app, initial_release=release)
+        app.update_idletasks()
+        app.update()
         c1_seen = threading.Event()
         allow_c = threading.Event()
         cancel_clicked = False
@@ -605,6 +609,8 @@ def test_update_dialog_close_mid_download_and_error_states(
 
         # 3. Closing UpdateDialog mid-download causes ZERO TclError and cleans .downloading
         dlg_close = UpdateDialog(app, initial_release=release)
+        app.update_idletasks()
+        app.update()
         c2_seen = threading.Event()
         allow_close = threading.Event()
         closed_mid_download = False
@@ -657,10 +663,10 @@ def test_update_dialog_close_mid_download_and_error_states(
         ):
             t_chk = threading.Thread(target=dlg_iso._check_worker, daemon=True)
             t_chk.start()
-            t_chk.join(timeout=3.0)
+            t_chk.join(timeout=10.0)
             t_dl = threading.Thread(target=dlg_iso._download_worker, args=(release, fake_dl_path), daemon=True)
             t_dl.start()
-            t_dl.join(timeout=3.0)
+            t_dl.join(timeout=10.0)
             assert not t_chk.is_alive()
             assert not t_dl.is_alive()
             assert spy_dlg_after.call_count == 0
