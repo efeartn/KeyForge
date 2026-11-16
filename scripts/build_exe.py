@@ -49,6 +49,17 @@ def build_executable() -> int:
         "--add-data",
         add_data_arg,
     ]
+    for unused_mod in (
+        "unittest",
+        "pydoc",
+        "doctest",
+        "sqlite3",
+        "xmlrpc",
+        "asyncio",
+        "multiprocessing",
+        "tkinter.tix",
+    ):
+        cmd.extend(["--exclude-module", unused_mod])
     if sys.platform == "win32":
         cmd.append("--noconsole")
     if icon_file.exists():

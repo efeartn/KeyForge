@@ -219,14 +219,23 @@ def _safe_set_iconbitmap(window: Any, ico_str: str) -> None:
             _apply_windows_dark_titlebar(window)
 
 
+_CACHED_BRAND_PIL_IMAGE: Image.Image | None = None
+
+
 def load_brand_ctk_image(size: tuple[int, int] = (32, 32)) -> ctk.CTkImage | None:
-    """Load the bundled KeyForge icon as a high-DPI CTkImage for header embedding."""
-    png_path = get_icon_png_path()
-    if not png_path.exists():
+    """Load the bundled KeyForge icon as a high-DPI CTkImage using a cached PIL source."""
+    global _CACHED_BRAND_PIL_IMAGE
+    if _CACHED_BRAND_PIL_IMAGE is None:
+        png_path = get_icon_png_path()
+        if not png_path.exists():
+            return None
+        with contextlib.suppress(Exception):
+            with Image.open(png_path) as opened:
+                _CACHED_BRAND_PIL_IMAGE = opened.convert("RGBA").copy()
+    if _CACHED_BRAND_PIL_IMAGE is None:
         return None
     with contextlib.suppress(Exception):
-        pil_img = Image.open(png_path)
-        return ctk.CTkImage(light_image=pil_img, dark_image=pil_img, size=size)
+        return ctk.CTkImage(light_image=_CACHED_BRAND_PIL_IMAGE, dark_image=_CACHED_BRAND_PIL_IMAGE, size=size)
     return None
 
 

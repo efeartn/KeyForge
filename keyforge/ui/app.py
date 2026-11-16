@@ -125,6 +125,8 @@ from keyforge.ui.update_dialog import UpdateDialog
 from keyforge.updater import DEFAULT_REPO, ReleaseInfo, fetch_latest_release
 
 MAX_UNDO_HISTORY = 40
+MAX_CONSOLE_LINES = 200
+MAX_STEP_ROW_POOL = 64
 _GEOMETRY_RE = re.compile(r"^(\d+)x(\d+)(?:([+-]\d+)([+-]\d+))?$")
 
 _SIMPLE_REPEAT_LABELS = {
@@ -237,6 +239,9 @@ class KeyForgeApp(ctk.CTk):
         self._active_step_id: str | None = None
         self._selected_step_index: int | None = 0 if self.profile.actions else None
         self._step_row_frames: dict[str, ctk.CTkFrame] = {}
+        self._step_row_pool: list[dict[str, Any]] = []
+        self._empty_sequence_lbl: ctk.CTkLabel | None = None
+        self._console_line_count: int = 0
         self._key_capture_target: str | None = None
         self._key_capture_pending_mod: str | None = None
         self._ui_tick_after_id: str | None = None
@@ -1682,13 +1687,17 @@ class KeyForgeApp(ctk.CTk):
             fg_color=BTN_NEUTRAL,
             hover_color=BTN_NEUTRAL_HOVER,
             font=self.fonts["small"],
-            command=lambda: self.console_box.delete("1.0", "end"),
+            command=self._clear_console_log,
         ).pack(side="right", padx=4)
 
         self.console_box = ctk.CTkTextbox(
             tab, fg_color=BG_INPUT, text_color=TEXT_SECONDARY, font=self.fonts["mono_small"], corner_radius=8
         )
         self.console_box.pack(fill="both", expand=True, padx=4, pady=(2, 4))
+
+    def _clear_console_log(self) -> None:
+        self.console_box.delete("1.0", "end")
+        self._console_line_count = 0
 
     # -------------------------------------------------------------------------
     # Simple <-> Studio Mode & Bidirectional Sync
@@ -2130,10 +2139,16 @@ class KeyForgeApp(ctk.CTk):
             if self._selected_step_index is not None and 0 <= self._selected_step_index < len(actions)
             else None
         )
-        for act_id, frame in self._step_row_frames.items():
-            with contextlib.suppress(Exception):
-                if frame.winfo_exists():
-                    frame.configure(border_color=BORDER_FOCUS if act_id == selected_id else BORDER_SUBTLE)
+        for slot in self._step_row_pool:
+            aid = slot["action_id"]
+            if aid in self._step_row_frames:
+                new_border = BORDER_FOCUS if aid == selected_id else BORDER_SUBTLE
+                if slot["border_color"] != new_border:
+                    slot["border_color"] = new_border
+                    frame = slot["row"]
+                    with contextlib.suppress(Exception):
+                        if frame.winfo_exists():
+                            frame.configure(border_color=new_border)
         return self._selected_step_index
 
     def delete_selected_step(self) -> bool:
@@ -2304,192 +2319,294 @@ class KeyForgeApp(ctk.CTk):
             text=f"{self._cached_enabled_count}/{total} active | Cycle: {self._cached_cycle_wait_ms}ms"
         )
 
-    def refresh_sequence_view(self) -> None:
-        """Rebuild timeline step cards using cached fonts and non-clipping right-first layout."""
-        for child in self.sequence_scroll.winfo_children():
-            child.destroy()
-        self._step_row_frames.clear()
+    def _create_step_row_slot(self) -> dict[str, Any]:
+        """Allocate a reusable Studio timeline card whose handlers read live index/action metadata."""
+        row = ctk.CTkFrame(
+            self.sequence_scroll,
+            fg_color=BG_CARD,
+            corner_radius=8,
+            height=50,
+            border_width=1,
+            border_color=BORDER_SUBTLE,
+        )
+        row.pack_propagate(False)
 
+        slot: dict[str, Any] = {
+            "index": 0,
+            "action_id": "",
+            "action_ref": None,
+            "render_key": None,
+            "fg_color": BG_CARD,
+            "border_color": BORDER_SUBTLE,
+            "row": row,
+        }
+
+        stripe = ctk.CTkFrame(row, fg_color=ACCENT_PRIMARY, width=4, height=40, corner_radius=2)
+        stripe.pack(side="left", fill="y", padx=(2, 6), pady=4)
+
+        idx_lbl = ctk.CTkLabel(
+            row,
+            text="#01",
+            width=32,
+            font=self.fonts["step_idx"],
+            text_color=TEXT_SECONDARY,
+        )
+        idx_lbl.pack(side="left", padx=(0, 2))
+
+        en_var = ctk.BooleanVar(value=True)
+        en_chk = ctk.CTkCheckBox(
+            row,
+            text="",
+            variable=en_var,
+            width=22,
+            checkbox_width=18,
+            checkbox_height=18,
+            command=lambda s=slot: (
+                self._on_toggle_step_enabled(s["action_ref"], s["en_var"].get())
+                if s["action_ref"] is not None
+                else None
+            ),
+        )
+        en_chk.pack(side="left", padx=2)
+
+        badge_lbl = ctk.CTkLabel(
+            row,
+            text="KEY",
+            fg_color=BG_ELEVATED,
+            text_color=TEXT_PRIMARY,
+            corner_radius=6,
+            width=58,
+            height=24,
+            font=self.fonts["step_badge"],
+        )
+        badge_lbl.pack(side="left", padx=5)
+
+        # Right fixed controls packed BEFORE text_col so long titles never clip action buttons.
+        ctk.CTkButton(
+            row,
+            text="✕",
+            width=26,
+            height=26,
+            fg_color=BTN_SUBTLE,
+            hover_color=ACCENT_DANGER,
+            font=self.fonts["small_bold"],
+            command=lambda s=slot: self.delete_step(s["index"]),
+        ).pack(side="right", padx=(2, 8))
+
+        ctk.CTkButton(
+            row,
+            text="Dup",
+            width=36,
+            height=26,
+            fg_color=BTN_NEUTRAL,
+            hover_color=BTN_NEUTRAL_HOVER,
+            font=self.fonts["small"],
+            command=lambda s=slot: self.duplicate_step(s["index"]),
+        ).pack(side="right", padx=2)
+
+        ctk.CTkButton(
+            row,
+            text="Edit",
+            width=40,
+            height=26,
+            fg_color=BTN_NEUTRAL,
+            hover_color=ACCENT_PRIMARY,
+            font=self.fonts["small_bold"],
+            command=lambda s=slot: self.open_edit_step_dialog(s["index"]),
+        ).pack(side="right", padx=2)
+
+        ctk.CTkButton(
+            row,
+            text="▼",
+            width=26,
+            height=26,
+            fg_color=BTN_NEUTRAL,
+            hover_color=BTN_NEUTRAL_HOVER,
+            font=self.fonts["small"],
+            command=lambda s=slot: self.move_step_down(s["index"]),
+        ).pack(side="right", padx=2)
+
+        ctk.CTkButton(
+            row,
+            text="▲",
+            width=26,
+            height=26,
+            fg_color=BTN_NEUTRAL,
+            hover_color=BTN_NEUTRAL_HOVER,
+            font=self.fonts["small"],
+            command=lambda s=slot: self.move_step_up(s["index"]),
+        ).pack(side="right", padx=2)
+
+        metric_lbl = ctk.CTkLabel(
+            row,
+            text="",
+            font=self.fonts["step_metric"],
+            fg_color=BG_INPUT,
+            text_color=TEXT_SECONDARY,
+            corner_radius=5,
+            padx=7,
+            pady=2,
+        )
+        metric_lbl.pack(side="right", padx=(4, 6))
+
+        text_col = ctk.CTkFrame(row, fg_color="transparent", height=38)
+        text_col.pack(side="left", fill="x", expand=True, padx=4, pady=4)
+
+        title_lbl = ctk.CTkLabel(
+            text_col,
+            text="",
+            text_color=TEXT_PRIMARY,
+            height=18,
+            font=self.fonts["step_title"],
+            anchor="w",
+        )
+        title_lbl.pack(fill="x", anchor="w")
+
+        sub_lbl = ctk.CTkLabel(
+            text_col,
+            text="",
+            text_color=TEXT_SECONDARY,
+            height=14,
+            font=self.fonts["step_sub"],
+            anchor="w",
+        )
+        sub_lbl.pack(fill="x", anchor="w")
+
+        for target_widget in (row, idx_lbl, badge_lbl, text_col, title_lbl, sub_lbl):
+            target_widget.bind("<Button-1>", lambda _e, s=slot: self._on_row_clicked(s["index"]))
+        row.bind("<Enter>", lambda _e, s=slot: self._on_row_hover(s["row"], s["action_id"], True))
+        row.bind("<Leave>", lambda _e, s=slot: self._on_row_hover(s["row"], s["action_id"], False))
+        for dbl_widget in (row, title_lbl, sub_lbl):
+            dbl_widget.bind("<Double-Button-1>", lambda _e, s=slot: self.open_edit_step_dialog(s["index"]))
+
+        slot.update(
+            {
+                "stripe": stripe,
+                "idx_lbl": idx_lbl,
+                "en_var": en_var,
+                "en_chk": en_chk,
+                "badge_lbl": badge_lbl,
+                "metric_lbl": metric_lbl,
+                "text_col": text_col,
+                "title_lbl": title_lbl,
+                "sub_lbl": sub_lbl,
+            }
+        )
+        return slot
+
+    def refresh_sequence_view(self) -> None:
+        """Update timeline step cards via a warm widget pool to minimize CPU & RAM churn."""
         actions = self.profile.actions
         self._update_cached_cycle_metrics()
 
-        if not actions:
+        visible: list[tuple[int, MacroAction]] = []
+        if actions:
+            if self._selected_step_index is not None:
+                self._selected_step_index = max(0, min(self._selected_step_index, len(actions) - 1))
+            q = self._filter_query
+            for idx, act in enumerate(actions):
+                if q and q not in f"{act.badge_text()} {act.describe()} {act.label}".lower():
+                    continue
+                visible.append((idx, act))
+        else:
             self._selected_step_index = None
-            ctk.CTkLabel(
-                self.sequence_scroll,
-                text=(
-                    "No steps in macro sequence.\nSelect a Template above or click '+ Key', '+ Wait', '+ Click' below."
-                ),
-                text_color=TEXT_MUTED,
-                font=self.fonts["body"],
-                justify="center",
-            ).pack(pady=52)
+
+        self._step_row_frames.clear()
+        if not visible:
+            for slot in self._step_row_pool:
+                if slot["row"].winfo_manager():
+                    slot["row"].pack_forget()
+            if self._empty_sequence_lbl is None:
+                self._empty_sequence_lbl = ctk.CTkLabel(
+                    self.sequence_scroll,
+                    text="",
+                    text_color=TEXT_MUTED,
+                    font=self.fonts["body"],
+                    justify="center",
+                )
+            empty_msg = (
+                "No steps match the current filter."
+                if actions and self._filter_query
+                else "No steps in macro sequence.\nSelect a Template above or click '+ Key', '+ Wait', '+ Click' below."
+            )
+            self._empty_sequence_lbl.configure(text=empty_msg)
+            if not self._empty_sequence_lbl.winfo_manager():
+                self._empty_sequence_lbl.pack(pady=52)
             return
 
-        if self._selected_step_index is not None:
-            self._selected_step_index = max(0, min(self._selected_step_index, len(actions) - 1))
+        if self._empty_sequence_lbl is not None and self._empty_sequence_lbl.winfo_manager():
+            self._empty_sequence_lbl.pack_forget()
 
-        for idx, act in enumerate(actions):
-            if self._filter_query:
-                haystack = f"{act.badge_text()} {act.describe()} {act.label}".lower()
-                if self._filter_query not in haystack:
-                    continue
+        needed = len(visible)
+        for slot in self._step_row_pool[needed:]:
+            if slot["row"].winfo_manager():
+                slot["row"].pack_forget()
+
+        # Release surplus cached rows beyond pool limit so huge temporary macros don't bloat idle RAM.
+        while len(self._step_row_pool) > max(needed, MAX_STEP_ROW_POOL):
+            extra_slot = self._step_row_pool.pop()
+            with contextlib.suppress(Exception):
+                extra_slot["row"].destroy()
+
+        while len(self._step_row_pool) < needed:
+            self._step_row_pool.append(self._create_step_row_slot())
+
+        for pos, (idx, act) in enumerate(visible):
+            slot = self._step_row_pool[pos]
+            slot["index"] = idx
+            slot["action_id"] = act.id
+            slot["action_ref"] = act
+
+            row = slot["row"]
+            self._step_row_frames[act.id] = row
 
             is_active = act.id == self._active_step_id
             is_selected = idx == self._selected_step_index
             row_bg = BG_CARD_ACTIVE if is_active else BG_CARD
-            row = ctk.CTkFrame(
-                self.sequence_scroll,
-                fg_color=row_bg,
-                corner_radius=8,
-                height=50,
-                border_width=1,
-                border_color=BORDER_FOCUS if is_selected else BORDER_SUBTLE,
-            )
-            row.pack_propagate(False)
-            row.pack(fill="x", pady=3, padx=2)
-            self._step_row_frames[act.id] = row
-
-            # 1. Left fixed elements
-            stripe = ctk.CTkFrame(row, fg_color=get_stripe_color(act.action_type), width=4, height=40, corner_radius=2)
-            stripe.pack(side="left", fill="y", padx=(2, 6), pady=4)
-
-            idx_lbl = ctk.CTkLabel(
-                row,
-                text=f"#{idx + 1:02d}",
-                width=32,
-                font=self.fonts["step_idx"],
-                text_color=TEXT_SECONDARY,
-            )
-            idx_lbl.pack(side="left", padx=(0, 2))
-
-            en_var = ctk.BooleanVar(value=act.enabled)
-            ctk.CTkCheckBox(
-                row,
-                text="",
-                variable=en_var,
-                width=22,
-                checkbox_width=18,
-                checkbox_height=18,
-                command=lambda a=act, v=en_var: self._on_toggle_step_enabled(a, v.get()),
-            ).pack(side="left", padx=2)
-
-            badge_bg, badge_fg = get_badge_colors(act.action_type)
-            badge_lbl = ctk.CTkLabel(
-                row,
-                text=act.badge_text(),
-                fg_color=badge_bg,
-                text_color=badge_fg,
-                corner_radius=6,
-                width=58,
-                height=24,
-                font=self.fonts["step_badge"],
-            )
-            badge_lbl.pack(side="left", padx=5)
-
-            # 2. Right fixed controls packed BEFORE text_col so long titles NEVER clip action buttons!
-            ctk.CTkButton(
-                row,
-                text="✕",
-                width=26,
-                height=26,
-                fg_color=BTN_SUBTLE,
-                hover_color=ACCENT_DANGER,
-                font=self.fonts["small_bold"],
-                command=lambda i=idx: self.delete_step(i),
-            ).pack(side="right", padx=(2, 8))
-
-            ctk.CTkButton(
-                row,
-                text="Dup",
-                width=36,
-                height=26,
-                fg_color=BTN_NEUTRAL,
-                hover_color=BTN_NEUTRAL_HOVER,
-                font=self.fonts["small"],
-                command=lambda i=idx: self.duplicate_step(i),
-            ).pack(side="right", padx=2)
-
-            ctk.CTkButton(
-                row,
-                text="Edit",
-                width=40,
-                height=26,
-                fg_color=BTN_NEUTRAL,
-                hover_color=ACCENT_PRIMARY,
-                font=self.fonts["small_bold"],
-                command=lambda i=idx: self.open_edit_step_dialog(i),
-            ).pack(side="right", padx=2)
-
-            ctk.CTkButton(
-                row,
-                text="▼",
-                width=26,
-                height=26,
-                fg_color=BTN_NEUTRAL,
-                hover_color=BTN_NEUTRAL_HOVER,
-                font=self.fonts["small"],
-                command=lambda i=idx: self.move_step_down(i),
-            ).pack(side="right", padx=2)
-
-            ctk.CTkButton(
-                row,
-                text="▲",
-                width=26,
-                height=26,
-                fg_color=BTN_NEUTRAL,
-                hover_color=BTN_NEUTRAL_HOVER,
-                font=self.fonts["small"],
-                command=lambda i=idx: self.move_step_up(i),
-            ).pack(side="right", padx=2)
-
-            ctk.CTkLabel(
-                row,
-                text=self._step_metric_pill(act),
-                font=self.fonts["step_metric"],
-                fg_color=BG_INPUT,
-                text_color=TEXT_SECONDARY,
-                corner_radius=5,
-                padx=7,
-                pady=2,
-            ).pack(side="right", padx=(4, 6))
-
-            # 3. Expandable Title + Subtitle Column
-            text_col = ctk.CTkFrame(row, fg_color="transparent", height=38)
-            text_col.pack(side="left", fill="x", expand=True, padx=4, pady=4)
+            border_col = BORDER_FOCUS if is_selected else BORDER_SUBTLE
 
             desc_raw = act.describe()
             desc_text = f"{desc_raw[:88]}…" if len(desc_raw) > 89 else desc_raw
-            title_lbl = ctk.CTkLabel(
-                text_col,
-                text=desc_text,
-                text_color=TEXT_PRIMARY if act.enabled else TEXT_MUTED,
-                height=18,
-                font=self.fonts["step_title"],
-                anchor="w",
-            )
-            title_lbl.pack(fill="x", anchor="w")
-
             sub_text = self._step_subtitle(act)
-            sub_lbl = None
-            if sub_text:
-                sub_lbl = ctk.CTkLabel(
-                    text_col,
-                    text=sub_text,
-                    text_color=TEXT_SECONDARY,
-                    height=14,
-                    font=self.fonts["step_sub"],
-                    anchor="w",
-                )
-                sub_lbl.pack(fill="x", anchor="w")
-                sub_lbl.bind("<Double-Button-1>", lambda _e, i=idx: self.open_edit_step_dialog(i))
+            metric_text = self._step_metric_pill(act)
+            render_key = (
+                idx,
+                act.id,
+                act.enabled,
+                act.action_type,
+                desc_text,
+                sub_text,
+                metric_text,
+            )
 
-            for target_widget in [w for w in (row, idx_lbl, badge_lbl, text_col, title_lbl, sub_lbl) if w is not None]:
-                target_widget.bind("<Button-1>", lambda _e, i=idx: self._on_row_clicked(i))
-            row.bind("<Enter>", lambda _e, r=row, aid=act.id: self._on_row_hover(r, aid, True))
-            row.bind("<Leave>", lambda _e, r=row, aid=act.id: self._on_row_hover(r, aid, False))
-            row.bind("<Double-Button-1>", lambda _e, i=idx: self.open_edit_step_dialog(i))
-            title_lbl.bind("<Double-Button-1>", lambda _e, i=idx: self.open_edit_step_dialog(i))
+            if slot["fg_color"] != row_bg or slot["border_color"] != border_col:
+                slot["fg_color"] = row_bg
+                slot["border_color"] = border_col
+                row.configure(fg_color=row_bg, border_color=border_col)
+
+            if slot["render_key"] != render_key:
+                slot["render_key"] = render_key
+                slot["stripe"].configure(fg_color=get_stripe_color(act.action_type))
+                slot["idx_lbl"].configure(text=f"#{idx + 1:02d}")
+                if slot["en_var"].get() != act.enabled:
+                    slot["en_var"].set(act.enabled)
+                badge_bg, badge_fg = get_badge_colors(act.action_type)
+                slot["badge_lbl"].configure(text=act.badge_text(), fg_color=badge_bg, text_color=badge_fg)
+                slot["metric_lbl"].configure(text=metric_text)
+                slot["title_lbl"].configure(
+                    text=desc_text,
+                    text_color=TEXT_PRIMARY if act.enabled else TEXT_MUTED,
+                )
+                sub_lbl = slot["sub_lbl"]
+                if sub_text:
+                    sub_lbl.configure(text=sub_text)
+                    if not sub_lbl.winfo_manager():
+                        sub_lbl.pack(fill="x", anchor="w")
+                elif sub_lbl.winfo_manager():
+                    sub_lbl.pack_forget()
+
+            if not row.winfo_manager():
+                row.pack(fill="x", pady=3, padx=2)
 
     def _on_row_clicked(self, index: int) -> None:
         self.focus_set()
@@ -3073,8 +3190,12 @@ class KeyForgeApp(ctk.CTk):
         self._refresh_security_tab_details()
 
     def _on_inspector_tab_changed(self) -> None:
-        if self._security_tab_dirty and self.inspector_tabs.get() == "Security":
+        current_tab = self.inspector_tabs.get()
+        if self._security_tab_dirty and current_tab == "Security":
             self._refresh_security_tab_details()
+        elif current_tab == "Console":
+            with contextlib.suppress(Exception):
+                self.console_box.see("end")
 
     def _refresh_security_tab_details(self) -> None:
         report = self._last_audit_report or audit_profile(self.profile)
@@ -3393,7 +3514,7 @@ class KeyForgeApp(ctk.CTk):
             return
         with contextlib.suppress(Exception):
             if self.winfo_exists():
-                self._hotkey_poll_after_id = self.after(40, self._poll_hotkey_queue)
+                self._hotkey_poll_after_id = self.after(75, self._poll_hotkey_queue)
 
     def _poll_hotkey_queue(self) -> None:
         self._hotkey_poll_after_id = None
@@ -3486,7 +3607,15 @@ class KeyForgeApp(ctk.CTk):
             if not self.winfo_exists():
                 return
         is_running = self._ui_tick()
-        interval_ms = 100 if is_running else 350
+        is_minimized = False
+        with contextlib.suppress(Exception):
+            is_minimized = self.state() == "iconic"
+        if is_running:
+            interval_ms = 100
+        elif is_minimized and self._mini_hud is None:
+            interval_ms = 1000
+        else:
+            interval_ms = 500
         self._ui_tick_after_id = self.after(interval_ms, self._schedule_ui_tick)
 
     def _ui_tick(self) -> bool:
@@ -3556,12 +3685,17 @@ class KeyForgeApp(ctk.CTk):
             self._tick_cache["actions_text"] = actions_text
             self.actions_lbl.configure(text=actions_text)
 
-        # Skip cursor polling when minimized or when Studio Mode isn't visible
+        # Skip cursor polling when minimized, in Mini-HUD, in Simple mode, or unfocused at idle
         is_minimized = False
         with contextlib.suppress(Exception):
             is_minimized = self.state() == "iconic"
 
-        if not is_minimized and self.ui_mode_var.get() == "Studio":
+        has_focus = False
+        if not is_minimized and self.ui_mode_var.get() == "Studio" and self._mini_hud is None:
+            with contextlib.suppress(Exception):
+                has_focus = is_running or (self.focus_displayof() is not None)
+
+        if has_focus:
             if IS_WINDOWS:
                 cx, cy = self.win32_backend.get_cursor_pos()
             else:
@@ -3587,7 +3721,12 @@ class KeyForgeApp(ctk.CTk):
         ts = datetime.now().strftime("%H:%M:%S")
         line = f"[{ts}] {message}\n"
         self.console_box.insert("end", line)
-        self.console_box.see("end")
+        self._console_line_count += 1
+        if self._console_line_count > MAX_CONSOLE_LINES:
+            self.console_box.delete("1.0", "26.0")
+            self._console_line_count = max(0, self._console_line_count - 25)
+        if self.ui_mode_var.get() == "Studio" and self.inspector_tabs.get() == "Console":
+            self.console_box.see("end")
         if hasattr(self, "footer_status_lbl"):
             self.footer_status_lbl.configure(text=f"● [{ts}] {message}")
 

@@ -350,3 +350,39 @@ def test_v14_craft_ui_key_capture_step_shortcuts_and_studio_repeat_visibility(
     finally:
         if not app._closing:
             app._on_close()
+
+
+def test_step_row_widget_pool_reuses_widgets_in_place_and_bounds_console_log(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("KEYFORGE_CONFIG_DIR", str(tmp_path))
+    app = KeyForgeApp(start_hotkey_listener=False)
+    try:
+        app._switch_ui_mode("Studio")
+        app._apply_template_chip("Press E -> Wait 200ms -> Click -> Press 1")
+        initial_frames = [slot["row"] for slot in app._step_row_pool[:4]]
+        assert len(app._step_row_frames) == 4
+
+        # Toggle enabled, scale waits, reorder, and duplicate -> reuses same pooled CTkFrames!
+        app._on_toggle_step_enabled(app.profile.actions[0], False)
+        app.scale_wait_times(0.5)
+        app.move_step_up(2)
+        app.move_step_down(1)
+        after_mutation_frames = [slot["row"] for slot in app._step_row_pool[:4]]
+        assert all(a is b for a, b in zip(initial_frames, after_mutation_frames, strict=True))
+
+        # Shrinking then expanding reuses warm pooled frames rather than allocating new ones
+        app.delete_step(3)
+        assert len(app._step_row_frames) == 3
+        app.duplicate_step(0)
+        assert len(app._step_row_frames) == 4
+        assert [slot["row"] for slot in app._step_row_pool[:4]] == initial_frames
+
+        # Console ring buffer prevents unbounded memory growth over long sessions
+        for i in range(260):
+            app._log_event(f"Telemetry sample #{i}")
+        assert app._console_line_count <= 200
+    finally:
+        if not app._closing:
+            app._on_close()

@@ -116,6 +116,8 @@ class POINT(ctypes.Structure):
 
 
 _user32 = None
+_GetAsyncKeyState = None
+_GetCursorPos = None
 if IS_WINDOWS:
     _user32 = ctypes.windll.user32
     _user32.SendInput.argtypes = [UINT, ctypes.POINTER(INPUT), ctypes.c_int]
@@ -133,19 +135,22 @@ if IS_WINDOWS:
     _user32.GetAsyncKeyState.argtypes = [ctypes.c_int]
     _user32.GetAsyncKeyState.restype = SHORT
 
+    _GetAsyncKeyState = _user32.GetAsyncKeyState
+    _GetCursorPos = _user32.GetCursorPos
+
 
 def get_async_key_state(vk_code: int) -> bool:
     """Safely query whether a Virtual-Key code is currently depressed (returns False on non-Windows)."""
-    if _user32 is None:
+    if _GetAsyncKeyState is None:
         return False
-    return bool(_user32.GetAsyncKeyState(int(vk_code)) & 0x8000)
+    return bool(_GetAsyncKeyState(int(vk_code)) & 0x8000)
 
 
 def get_system_cursor_pos() -> tuple[int, int]:
     """Safely query the OS cursor position across Windows, macOS, and Linux."""
-    if _user32 is not None:
+    if _GetCursorPos is not None:
         pt = POINT()
-        if _user32.GetCursorPos(ctypes.byref(pt)):
+        if _GetCursorPos(ctypes.byref(pt)):
             return (int(pt.x), int(pt.y))
     return (0, 0)
 

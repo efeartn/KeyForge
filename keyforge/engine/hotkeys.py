@@ -13,14 +13,20 @@ from keyforge.models.keymap import KeyInfo, parse_key_combo
 class GlobalHotkeyManager:
     """Monitors global key combinations (Start/Stop, Record, Panic Stop) in the background."""
 
-    def __init__(self, poll_interval_s: float = 0.015) -> None:
+    def __init__(self, poll_interval_s: float = 0.020) -> None:
         self._poll_interval_s = max(0.005, float(poll_interval_s))
         self._lock = threading.RLock()
         self._stop_event = threading.Event()
         self._thread: threading.Thread | None = None
 
         self._bindings: dict[str, tuple[list[KeyInfo], Callable[[], None]]] = {}
+        self._compiled_bindings: tuple[tuple[str, tuple[int, ...], Callable[[], None]], ...] = ()
         self._was_active: dict[str, bool] = {}
+
+    def _rebuild_snapshot(self) -> None:
+        self._compiled_bindings = tuple(
+            (name, tuple(k.vk_code for k in keys), cb) for name, (keys, cb) in self._bindings.items() if keys
+        )
 
     def register(self, name: str, combo: str, callback: Callable[[], None]) -> None:
         """Register or update a named hotkey binding (e.g. name='panic', combo='F12')."""
@@ -28,18 +34,21 @@ class GlobalHotkeyManager:
         with self._lock:
             self._bindings[name] = (keys, callback)
             self._was_active[name] = False
+            self._rebuild_snapshot()
 
     def unregister(self, name: str) -> None:
         """Remove a named hotkey binding."""
         with self._lock:
             self._bindings.pop(name, None)
             self._was_active.pop(name, None)
+            self._rebuild_snapshot()
 
     def clear(self) -> None:
         """Remove all hotkey bindings."""
         with self._lock:
             self._bindings.clear()
             self._was_active.clear()
+            self._rebuild_snapshot()
 
     def start(self) -> None:
         """Start the background Win32 hotkey polling daemon thread."""
@@ -76,17 +85,29 @@ class GlobalHotkeyManager:
 
     def _poll_loop(self) -> None:
         while not self._stop_event.wait(timeout=self._poll_interval_s):
-            callbacks_to_fire: list[Callable[[], None]] = []
-            with self._lock:
-                for name, (keys, callback) in self._bindings.items():
-                    all_pressed = all(get_async_key_state(k.vk_code) for k in keys)
-                    was_pressed = self._was_active.get(name, False)
-                    if all_pressed and not was_pressed:
-                        self._was_active[name] = True
-                        callbacks_to_fire.append(callback)
-                    elif not all_pressed and was_pressed:
-                        self._was_active[name] = False
+            snapshot = self._compiled_bindings
+            if not snapshot:
+                continue
+            callbacks_to_fire: list[Callable[[], None]] | None = None
+            for name, vks, callback in snapshot:
+                # Fast exit: check the primary trigger key (last in combo) before any modifiers.
+                all_pressed = get_async_key_state(vks[-1])
+                if all_pressed and len(vks) > 1:
+                    for mod_vk in vks[:-1]:
+                        if not get_async_key_state(mod_vk):
+                            all_pressed = False
+                            break
 
-            for cb in callbacks_to_fire:
-                with contextlib.suppress(Exception):
-                    cb()
+                was_pressed = self._was_active.get(name, False)
+                if all_pressed and not was_pressed:
+                    self._was_active[name] = True
+                    if callbacks_to_fire is None:
+                        callbacks_to_fire = []
+                    callbacks_to_fire.append(callback)
+                elif not all_pressed and was_pressed:
+                    self._was_active[name] = False
+
+            if callbacks_to_fire:
+                for cb in callbacks_to_fire:
+                    with contextlib.suppress(Exception):
+                        cb()
