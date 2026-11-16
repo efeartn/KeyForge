@@ -32,7 +32,7 @@ from keyforge.engine.backend import DryRunBackend
 from keyforge.engine.executor import ExecutionTelemetry, ExecutorState, MacroExecutor
 from keyforge.engine.hotkeys import GlobalHotkeyManager
 from keyforge.engine.recorder import MacroRecorder, RecorderConfig
-from keyforge.engine.win32_input import IS_WINDOWS, Win32InputBackend, get_system_cursor_pos
+from keyforge.engine.win32_input import IS_WINDOWS, Win32InputBackend
 from keyforge.models.action import (
     ActionType,
     ClickType,
@@ -46,7 +46,12 @@ from keyforge.models.action import (
     make_wait,
 )
 from keyforge.models.dsl import format_actions_to_dsl, parse_quick_expression
-from keyforge.models.keymap import list_common_keys, normalize_key_combo
+from keyforge.models.keymap import (
+    finalize_modifier_only_capture,
+    format_captured_key_combo,
+    list_common_keys,
+    normalize_key_combo,
+)
 from keyforge.models.profile import (
     MacroProfile,
     RepeatMode,
@@ -73,8 +78,6 @@ from keyforge.ui.theme import (
     ACCENT_WARNING_HOVER,
     BADGE_CRIT_BG,
     BADGE_CRIT_FG,
-    BADGE_OK_BG,
-    BADGE_OK_FG,
     BADGE_WARN_BG,
     BADGE_WARN_FG,
     BANNER_ERR_BG,
@@ -96,7 +99,10 @@ from keyforge.ui.theme import (
     BG_INPUT,
     BG_PANEL,
     BG_ROOT,
+    BORDER_FOCUS,
     BORDER_SUBTLE,
+    BTN_DANGER_SUBTLE,
+    BTN_DANGER_SUBTLE_TEXT,
     BTN_NEUTRAL,
     BTN_NEUTRAL_HOVER,
     BTN_SUBTLE,
@@ -107,6 +113,7 @@ from keyforge.ui.theme import (
     TEXT_PRIMARY,
     TEXT_SECONDARY,
     apply_window_icon,
+    cancel_all_tcl_after_timers,
     center_window_on_parent,
     get_badge_colors,
     get_fonts,
@@ -127,12 +134,35 @@ _SIMPLE_REPEAT_LABELS = {
 }
 _LABEL_TO_REPEAT_MODE = {v: k for k, v in _SIMPLE_REPEAT_LABELS.items()}
 
+_STUDIO_REPEAT_LABELS = {
+    RepeatMode.COUNT: "Fixed Count",
+    RepeatMode.INFINITE: "Infinite",
+    RepeatMode.DURATION: "Duration",
+}
+_LABEL_TO_STUDIO_REPEAT = {
+    "Fixed Count": RepeatMode.COUNT,
+    "Infinite": RepeatMode.INFINITE,
+    "Duration": RepeatMode.DURATION,
+    RepeatMode.COUNT.value: RepeatMode.COUNT,
+    RepeatMode.INFINITE.value: RepeatMode.INFINITE,
+    RepeatMode.DURATION.value: RepeatMode.DURATION,
+}
+
 _SIMPLE_TASK_LABELS = {
-    "clicker": "Auto-Clicker",
-    "spammer": "Key Spammer",
+    "spammer": "Key Repeater",
     "sequence": "Quick Sequence",
 }
-_LABEL_TO_SIMPLE_TASK = {v: k for k, v in _SIMPLE_TASK_LABELS.items()}
+_LABEL_TO_SIMPLE_TASK = {
+    "Key Repeater": "spammer",
+    "Key Spammer": "spammer",
+    "Quick Sequence": "sequence",
+}
+
+
+def _parse_repeat_mode(value: str) -> RepeatMode:
+    if value in _LABEL_TO_STUDIO_REPEAT:
+        return _LABEL_TO_STUDIO_REPEAT[value]
+    return RepeatMode(value)
 
 
 def _platform_badge_label() -> str:
@@ -205,7 +235,10 @@ class KeyForgeApp(ctk.CTk):
         self._closing = False
         self._hotkey_listener_enabled = bool(start_hotkey_listener)
         self._active_step_id: str | None = None
+        self._selected_step_index: int | None = 0 if self.profile.actions else None
         self._step_row_frames: dict[str, ctk.CTkFrame] = {}
+        self._key_capture_target: str | None = None
+        self._key_capture_pending_mod: str | None = None
         self._ui_tick_after_id: str | None = None
         self._startup_update_after_id: str | None = None
         self._startup_update_poll_after_id: str | None = None
@@ -240,7 +273,7 @@ class KeyForgeApp(ctk.CTk):
         self.ui_mode_var = ctk.StringVar(value="Simple" if self.app_config.ui_mode == "simple" else "Studio")
         self.dry_run_var = ctk.BooleanVar(value=self.app_config.dry_run)
         self.check_updates_var = ctk.BooleanVar(value=self.app_config.check_updates_on_startup)
-        self.repeat_mode_var = ctk.StringVar(value=self.profile.repeat_mode.value)
+        self.repeat_mode_var = ctk.StringVar(value=_STUDIO_REPEAT_LABELS.get(self.profile.repeat_mode, "Infinite"))
         self.simple_repeat_mode_var = ctk.StringVar(
             value=_SIMPLE_REPEAT_LABELS.get(self.profile.repeat_mode, "Forever")
         )
@@ -270,6 +303,15 @@ class KeyForgeApp(ctk.CTk):
         self.bind("<Control-y>", self._on_ctrl_y)
         self.bind("<Control-Shift-Z>", self._on_ctrl_y)
         self.bind("<Control-s>", lambda _e: self.action_save_profile_dialog())
+        self.bind("<Control-d>", self._on_ctrl_d)
+        self.bind("<Delete>", self._on_delete_key)
+        self.bind("<BackSpace>", self._on_delete_key)
+        self.bind("<space>", self._on_space_key)
+        self.bind("<Alt-Up>", self._on_alt_up)
+        self.bind("<Alt-Down>", self._on_alt_down)
+        self.bind("<Up>", self._on_arrow_up)
+        self.bind("<Down>", self._on_arrow_down)
+        self.bind("<Escape>", self._on_main_escape)
 
         # Initial Render & Audit
         self.refresh_sequence_view()
@@ -353,18 +395,6 @@ class KeyForgeApp(ctk.CTk):
                 save_active_profile_backup(self.profile)
 
     def _capture_simple_controls_to_config(self) -> None:
-        with contextlib.suppress(Exception):
-            x_val = int(self.sc_x_entry.get().strip() or "0")
-            y_val = int(self.sc_y_entry.get().strip() or "0")
-            self.app_config.simple_clicker = {
-                "button": self.sc_button_var.get(),
-                "click_type": self.sc_click_type_var.get(),
-                "interval_ms": int(round(self.sc_interval_slider.get())),
-                "jitter_enabled": bool(self.sc_jitter_var.get()),
-                "loc_mode": "fixed" if self.sc_loc_mode_var.get() == "Fixed XY" else "cursor",
-                "x": x_val,
-                "y": y_val,
-            }
         with contextlib.suppress(Exception):
             self.app_config.simple_spammer = {
                 "key": self.ss_key_combo.get().strip() or "E",
@@ -482,14 +512,15 @@ class KeyForgeApp(ctk.CTk):
         self.top_panic_btn = ctk.CTkButton(
             bar,
             text=f"Panic Stop ({self.profile.panic_hotkey})",
-            fg_color=ACCENT_DANGER,
-            hover_color=ACCENT_DANGER_HOVER,
+            fg_color=BTN_DANGER_SUBTLE,
+            hover_color=ACCENT_DANGER,
+            text_color=BTN_DANGER_SUBTLE_TEXT,
             font=self.fonts["small_bold"],
-            height=30,
+            height=28,
             width=0,
             command=self.trigger_panic_stop,
         )
-        self.top_panic_btn.pack(side="right", padx=(4, 14), pady=12)
+        self.top_panic_btn.pack(side="right", padx=(4, 14), pady=13)
 
         self.mini_hud_btn = ctk.CTkButton(
             bar,
@@ -498,11 +529,11 @@ class KeyForgeApp(ctk.CTk):
             hover_color=BTN_NEUTRAL_HOVER,
             text_color=TEXT_PRIMARY,
             font=self.fonts["small_bold"],
-            height=30,
+            height=28,
             width=0,
             command=self.toggle_mini_hud_mode,
         )
-        self.mini_hud_btn.pack(side="right", padx=3, pady=12)
+        self.mini_hud_btn.pack(side="right", padx=3, pady=13)
 
         self.updates_btn = ctk.CTkButton(
             bar,
@@ -511,25 +542,27 @@ class KeyForgeApp(ctk.CTk):
             hover_color=BTN_NEUTRAL_HOVER,
             text_color=TEXT_PRIMARY,
             font=self.fonts["small_bold"],
-            height=30,
+            height=28,
             width=0,
             command=self.open_update_dialog,
         )
-        self.updates_btn.pack(side="right", padx=3, pady=12)
+        self.updates_btn.pack(side="right", padx=3, pady=13)
 
         self.audit_badge = ctk.CTkButton(
             bar,
-            text="Audit OK",
+            text="Verified",
             font=self.fonts["small_bold"],
-            fg_color=BADGE_OK_BG,
-            hover_color=BG_ELEVATED,
-            text_color=BADGE_OK_FG,
+            fg_color=BG_ELEVATED,
+            hover_color=BTN_NEUTRAL,
+            text_color=ACCENT_SUCCESS,
             corner_radius=6,
             height=26,
             width=0,
+            border_width=1,
+            border_color=BORDER_SUBTLE,
             command=self._focus_security_audit,
         )
-        self.audit_badge.pack(side="right", padx=3, pady=14)
+        self.audit_badge.pack(side="right", padx=4, pady=14)
 
     def _build_banners(self) -> None:
         """Build collapsible Update Banner and Transient Inline Notification Strip."""
@@ -621,7 +654,7 @@ class KeyForgeApp(ctk.CTk):
 
         ctk.CTkLabel(
             sbar,
-            text="Ctrl+Z Undo  •  Ctrl+Y Redo  •  Ctrl+S Save  •  Double-Click Step to Edit",
+            text="Del Delete  •  Ctrl+D Duplicate  •  Space Toggle  •  Alt+↑/↓ Move  •  Double-Click Edit",
             font=self.fonts["small"],
             text_color=TEXT_MUTED,
         ).pack(side="right", padx=14, pady=2)
@@ -694,11 +727,11 @@ class KeyForgeApp(ctk.CTk):
             text_color=TEXT_PRIMARY,
         ).pack(side="left")
 
-        initial_task_label = _SIMPLE_TASK_LABELS.get(self.app_config.simple_task, "Auto-Clicker")
+        initial_task_label = _SIMPLE_TASK_LABELS.get(self.app_config.simple_task, "Key Repeater")
         self.simple_task_var = ctk.StringVar(value=initial_task_label)
         self.simple_task_seg = ctk.CTkSegmentedButton(
             left_card,
-            values=["Auto-Clicker", "Key Spammer", "Quick Sequence"],
+            values=["Key Repeater", "Quick Sequence"],
             variable=self.simple_task_var,
             command=self._on_simple_task_changed,
             height=34,
@@ -714,11 +747,9 @@ class KeyForgeApp(ctk.CTk):
         self.simple_task_body = ctk.CTkFrame(left_card, fg_color="transparent")
         self.simple_task_body.pack(fill="both", expand=True, padx=18, pady=(0, 14))
 
-        self.sc_panel = ctk.CTkFrame(self.simple_task_body, fg_color="transparent")
         self.ss_panel = ctk.CTkFrame(self.simple_task_body, fg_color="transparent")
         self.sq_panel = ctk.CTkFrame(self.simple_task_body, fg_color="transparent")
 
-        self._build_simple_clicker_panel(self.sc_panel)
         self._build_simple_spammer_panel(self.ss_panel)
         self._build_simple_sequence_panel(self.sq_panel)
 
@@ -733,157 +764,21 @@ class KeyForgeApp(ctk.CTk):
         right_card.grid(row=0, column=1, sticky="nsew", padx=(8, 0))
         self._build_simple_control_center(right_card)
 
-    def _build_simple_clicker_panel(self, panel: ctk.CTkFrame) -> None:
-        cfg = self.app_config.simple_clicker
-
-        # Mouse Button & Click Type
-        r_btn = ctk.CTkFrame(panel, fg_color=BG_CARD, corner_radius=10, border_width=1, border_color=BORDER_SUBTLE)
-        r_btn.pack(fill="x", pady=(0, 10))
-        ctk.CTkLabel(r_btn, text="Mouse Button", font=self.fonts["small_bold"], text_color=TEXT_SECONDARY).pack(
-            anchor="w", padx=14, pady=(10, 6)
-        )
-        self.sc_button_var = ctk.StringVar(value=str(cfg.get("button", "Left")))
-        ctk.CTkSegmentedButton(
-            r_btn,
-            values=["Left", "Right", "Middle"],
-            variable=self.sc_button_var,
-            command=lambda _v: self._apply_simple_clicker_to_profile(),
-            height=30,
-            fg_color=BG_ROOT,
-            selected_color=ACCENT_PRIMARY,
-            unselected_color=BG_ELEVATED,
-            font=self.fonts["body"],
-        ).pack(fill="x", padx=14, pady=(0, 10))
-
-        ctk.CTkLabel(r_btn, text="Click Mode", font=self.fonts["small_bold"], text_color=TEXT_SECONDARY).pack(
-            anchor="w", padx=14, pady=(2, 6)
-        )
-        self.sc_click_type_var = ctk.StringVar(value=str(cfg.get("click_type", "Single")))
-        ctk.CTkSegmentedButton(
-            r_btn,
-            values=["Single", "Double"],
-            variable=self.sc_click_type_var,
-            command=lambda _v: self._apply_simple_clicker_to_profile(),
-            height=30,
-            fg_color=BG_ROOT,
-            selected_color=ACCENT_PRIMARY,
-            unselected_color=BG_ELEVATED,
-            font=self.fonts["body"],
-        ).pack(fill="x", padx=14, pady=(0, 12))
-
-        # Click Speed / Interval Slider
-        r_spd = ctk.CTkFrame(panel, fg_color=BG_CARD, corner_radius=10, border_width=1, border_color=BORDER_SUBTLE)
-        r_spd.pack(fill="x", pady=(0, 10))
-        spd_hdr = ctk.CTkFrame(r_spd, fg_color="transparent")
-        spd_hdr.pack(fill="x", padx=14, pady=(10, 4))
-        ctk.CTkLabel(spd_hdr, text="Click Interval", font=self.fonts["small_bold"], text_color=TEXT_SECONDARY).pack(
-            side="left"
-        )
-        init_ms = max(20, min(2000, int(cfg.get("interval_ms", 100))))
-        self.sc_interval_lbl = ctk.CTkLabel(
-            spd_hdr,
-            text=f"{init_ms} ms ({1000.0 / init_ms:.1f} CPS)",
-            font=self.fonts["mono_bold"],
-            text_color=ACCENT_PRIMARY,
-        )
-        self.sc_interval_lbl.pack(side="right")
-
-        self.sc_interval_slider = ctk.CTkSlider(
-            r_spd,
-            from_=20,
-            to=2000,
-            number_of_steps=198,
-            button_color=ACCENT_PRIMARY,
-            progress_color=ACCENT_PRIMARY,
-            command=self._on_sc_slider_moved,
-        )
-        self.sc_interval_slider.set(init_ms)
-        self.sc_interval_slider.pack(fill="x", padx=14, pady=(2, 8))
-
-        self.sc_jitter_var = ctk.BooleanVar(value=bool(cfg.get("jitter_enabled", True)))
-        ctk.CTkSwitch(
-            r_spd,
-            text="Humanized timing variance (±10%)",
-            variable=self.sc_jitter_var,
-            font=self.fonts["small"],
-            command=self._apply_simple_clicker_to_profile,
-        ).pack(anchor="w", padx=14, pady=(0, 10))
-
-        # Target Position
-        r_loc = ctk.CTkFrame(panel, fg_color=BG_CARD, corner_radius=10, border_width=1, border_color=BORDER_SUBTLE)
-        r_loc.pack(fill="x")
-        loc_top = ctk.CTkFrame(r_loc, fg_color="transparent")
-        loc_top.pack(fill="x", padx=14, pady=(10, 8))
-        ctk.CTkLabel(loc_top, text="Click Location", font=self.fonts["small_bold"], text_color=TEXT_SECONDARY).pack(
-            side="left"
-        )
-        init_loc = "Fixed XY" if str(cfg.get("loc_mode", "cursor")).lower() == "fixed" else "At Cursor"
-        self.sc_loc_mode_var = ctk.StringVar(value=init_loc)
-        ctk.CTkSegmentedButton(
-            loc_top,
-            values=["At Cursor", "Fixed XY"],
-            variable=self.sc_loc_mode_var,
-            command=self._on_sc_loc_mode_changed,
-            width=160,
-            height=26,
-            fg_color=BG_ROOT,
-            selected_color=ACCENT_PRIMARY,
-            unselected_color=BG_ELEVATED,
-            font=self.fonts["small"],
-        ).pack(side="right")
-
-        self.sc_xy_row = ctk.CTkFrame(r_loc, fg_color="transparent")
-        self.sc_x_entry = ctk.CTkEntry(
-            self.sc_xy_row, width=72, height=28, fg_color=BG_INPUT, border_color=BORDER_SUBTLE
-        )
-        self.sc_x_entry.insert(0, str(cfg.get("x", 0)))
-        self.sc_y_entry = ctk.CTkEntry(
-            self.sc_xy_row, width=72, height=28, fg_color=BG_INPUT, border_color=BORDER_SUBTLE
-        )
-        self.sc_y_entry.insert(0, str(cfg.get("y", 0)))
-        ctk.CTkLabel(self.sc_xy_row, text="X:", font=self.fonts["small"]).pack(side="left", padx=(0, 4))
-        self.sc_x_entry.pack(side="left", padx=(0, 8))
-        ctk.CTkLabel(self.sc_xy_row, text="Y:", font=self.fonts["small"]).pack(side="left", padx=(0, 4))
-        self.sc_y_entry.pack(side="left", padx=(0, 8))
-        ctk.CTkButton(
-            self.sc_xy_row,
-            text="Pick Cursor",
-            width=88,
-            height=28,
-            fg_color=BTN_NEUTRAL,
-            hover_color=BTN_NEUTRAL_HOVER,
-            font=self.fonts["small_bold"],
-            command=self._pick_simple_cursor_xy,
-        ).pack(side="left")
-        ctk.CTkButton(
-            self.sc_xy_row,
-            text="Set",
-            width=48,
-            height=28,
-            fg_color=ACCENT_PRIMARY,
-            hover_color=ACCENT_PRIMARY_HOVER,
-            font=self.fonts["small_bold"],
-            command=self._apply_simple_clicker_to_profile,
-        ).pack(side="right")
-
-        if init_loc == "Fixed XY":
-            self.sc_xy_row.pack(fill="x", padx=14, pady=(0, 10))
-
     def _build_simple_spammer_panel(self, panel: ctk.CTkFrame) -> None:
         cfg = self.app_config.simple_spammer
 
         r_key = ctk.CTkFrame(panel, fg_color=BG_CARD, corner_radius=10, border_width=1, border_color=BORDER_SUBTLE)
         r_key.pack(fill="x", pady=(0, 12))
-        ctk.CTkLabel(r_key, text="Target Key or Combo", font=self.fonts["small_bold"], text_color=TEXT_SECONDARY).pack(
-            anchor="w", padx=14, pady=(12, 6)
-        )
+        ctk.CTkLabel(
+            r_key, text="Key or Shortcut to Repeat", font=self.fonts["small_bold"], text_color=TEXT_SECONDARY
+        ).pack(anchor="w", padx=14, pady=(12, 6))
         key_row = ctk.CTkFrame(r_key, fg_color="transparent")
         key_row.pack(fill="x", padx=14, pady=(0, 12))
 
         self.ss_key_combo = ctk.CTkComboBox(
             key_row,
             values=list_common_keys(),
-            width=190,
+            width=180,
             height=32,
             fg_color=BG_INPUT,
             border_color=BORDER_SUBTLE,
@@ -894,17 +789,30 @@ class KeyForgeApp(ctk.CTk):
         )
         self.ss_key_combo.set(str(cfg.get("key", "E")))
         self.ss_key_combo.pack(side="left")
+        self.ss_key_combo.bind("<Return>", lambda _e: self._apply_simple_spammer_to_profile())
 
-        ctk.CTkButton(
+        self.ss_bind_key_btn = ctk.CTkButton(
             key_row,
-            text="Apply Key",
-            width=92,
+            text="Bind Key",
+            width=84,
             height=32,
             fg_color=BTN_NEUTRAL,
             hover_color=BTN_NEUTRAL_HOVER,
             font=self.fonts["small_bold"],
+            command=lambda: self.start_main_key_capture("simple_spammer"),
+        )
+        self.ss_bind_key_btn.pack(side="left", padx=(8, 0))
+
+        ctk.CTkButton(
+            key_row,
+            text="Apply",
+            width=68,
+            height=32,
+            fg_color=ACCENT_PRIMARY,
+            hover_color=ACCENT_PRIMARY_HOVER,
+            font=self.fonts["small_bold"],
             command=self._apply_simple_spammer_to_profile,
-        ).pack(side="left", padx=(10, 0))
+        ).pack(side="left", padx=(6, 0))
 
         # Key Interval Slider
         r_spd = ctk.CTkFrame(panel, fg_color=BG_CARD, corner_radius=10, border_width=1, border_color=BORDER_SUBTLE)
@@ -933,7 +841,25 @@ class KeyForgeApp(ctk.CTk):
             command=self._on_ss_slider_moved,
         )
         self.ss_interval_slider.set(init_ms)
-        self.ss_interval_slider.pack(fill="x", padx=14, pady=(2, 10))
+        self.ss_interval_slider.pack(fill="x", padx=14, pady=(2, 8))
+
+        chips_row = ctk.CTkFrame(r_spd, fg_color="transparent")
+        chips_row.pack(fill="x", padx=14, pady=(0, 10))
+        ctk.CTkLabel(chips_row, text="Presets:", font=self.fonts["small"], text_color=TEXT_MUTED).pack(
+            side="left", padx=(0, 6)
+        )
+        for ms in (25, 50, 100, 250, 500):
+            ctk.CTkButton(
+                chips_row,
+                text=f"{ms}ms",
+                width=48,
+                height=24,
+                fg_color=BTN_SUBTLE,
+                hover_color=BTN_SUBTLE_HOVER,
+                text_color=TEXT_SECONDARY,
+                font=self.fonts["small"],
+                command=lambda target_ms=ms: self._set_simple_spammer_interval(target_ms),
+            ).pack(side="left", padx=2)
 
         self.ss_jitter_var = ctk.BooleanVar(value=bool(cfg.get("jitter_enabled", True)))
         ctk.CTkSwitch(
@@ -1052,8 +978,9 @@ class KeyForgeApp(ctk.CTk):
             card,
             text=f"Panic Stop ({self.profile.panic_hotkey})",
             height=34,
-            fg_color=ACCENT_DANGER,
-            hover_color=ACCENT_DANGER_HOVER,
+            fg_color=BTN_DANGER_SUBTLE,
+            hover_color=ACCENT_DANGER,
+            text_color=BTN_DANGER_SUBTLE_TEXT,
             font=self.fonts["body_bold"],
             command=self.trigger_panic_stop,
         )
@@ -1104,13 +1031,14 @@ class KeyForgeApp(ctk.CTk):
             command=self._on_simple_repeat_val_commit,
         ).pack(side="left")
 
-        ctk.CTkSwitch(
+        self._simple_dry_run_switch = ctk.CTkSwitch(
             rep_box,
-            text="Dry-Run Simulation (safe preview, no OS clicks)",
+            text="Dry-Run Simulation (safe preview, no OS input)",
             variable=self.dry_run_var,
             font=self.fonts["small"],
             command=self._on_dry_run_toggled,
-        ).pack(anchor="w", padx=12, pady=(2, 6))
+        )
+        self._simple_dry_run_switch.pack(anchor="w", padx=12, pady=(2, 6))
 
         cd_row = ctk.CTkFrame(rep_box, fg_color="transparent")
         cd_row.pack(fill="x", padx=12, pady=(0, 8))
@@ -1205,86 +1133,88 @@ class KeyForgeApp(ctk.CTk):
         self._build_main_workspace(parent)
 
     def _build_bento_metrics_strip(self, parent: ctk.CTkFrame) -> None:
-        strip = ctk.CTkFrame(parent, fg_color="transparent")
-        strip.pack(fill="x", padx=14, pady=(6, 3))
-        for col in range(4):
-            strip.grid_columnconfigure(col, weight=1, uniform="bento")
-
-        # Card 1: Engine Status
-        c1 = ctk.CTkFrame(strip, fg_color=BG_PANEL, corner_radius=10, border_width=1, border_color=BORDER_SUBTLE)
-        c1.grid(row=0, column=0, sticky="nsew", padx=(0, 4))
-        ctk.CTkLabel(c1, text="ENGINE STATUS", font=self.fonts["caption_bold"], text_color=TEXT_MUTED).pack(
-            anchor="w", padx=10, pady=(5, 0)
+        strip = ctk.CTkFrame(
+            parent,
+            fg_color=BG_PANEL,
+            corner_radius=10,
+            border_width=1,
+            border_color=BORDER_SUBTLE,
+            height=42,
         )
-        self.status_lbl = ctk.CTkLabel(c1, text="● IDLE", font=self.fonts["metric"], text_color=ACCENT_SUCCESS)
-        self.status_lbl.pack(anchor="w", padx=10, pady=(0, 0))
+        strip.pack(fill="x", padx=14, pady=(6, 4))
+        strip.pack_propagate(False)
+
+        # Left Cluster: Status + Injection Mode
+        self.status_lbl = ctk.CTkLabel(strip, text="● Ready", font=self.fonts["body_bold"], text_color=ACCENT_SUCCESS)
+        self.status_lbl.pack(side="left", padx=(14, 8))
+
         self.mode_sub_lbl = ctk.CTkLabel(
-            c1, text="Mode: Live OS Injection", font=self.fonts["small"], text_color=TEXT_SECONDARY
+            strip,
+            text="Live Input",
+            font=self.fonts["small_bold"],
+            fg_color=BG_ELEVATED,
+            text_color=TEXT_SECONDARY,
+            corner_radius=5,
+            padx=8,
+            pady=2,
         )
-        self.mode_sub_lbl.pack(anchor="w", padx=10, pady=(0, 5))
+        self.mode_sub_lbl.pack(side="left", padx=(0, 10))
 
-        # Card 2: Execution Progress
-        c2 = ctk.CTkFrame(strip, fg_color=BG_PANEL, corner_radius=10, border_width=1, border_color=BORDER_SUBTLE)
-        c2.grid(row=0, column=1, sticky="nsew", padx=4)
-        ctk.CTkLabel(c2, text="EXECUTION PROGRESS", font=self.fonts["caption_bold"], text_color=TEXT_MUTED).pack(
-            anchor="w", padx=10, pady=(5, 0)
-        )
+        ctk.CTkFrame(strip, fg_color=BORDER_SUBTLE, width=1, height=20).pack(side="left", padx=4)
+
+        # Middle Cluster: Cycles + Compact Progress + Cycle Timing
         self.cycles_lbl = ctk.CTkLabel(
-            c2, text="0 Cycles | 0 Actions", font=self.fonts["metric"], text_color=TEXT_PRIMARY
+            strip, text="0 Cycles | 0 Actions", font=self.fonts["small_bold"], text_color=TEXT_PRIMARY
         )
-        self.cycles_lbl.pack(anchor="w", padx=10, pady=(0, 2))
-        self.cycle_progress = ctk.CTkProgressBar(c2, height=6, fg_color=BG_INPUT, progress_color=ACCENT_PRIMARY)
+        self.cycles_lbl.pack(side="left", padx=(10, 8))
+
+        self.cycle_progress = ctk.CTkProgressBar(
+            strip, width=88, height=5, fg_color=BG_INPUT, progress_color=ACCENT_PRIMARY
+        )
         self.cycle_progress.set(0.0)
-        self.cycle_progress.pack(fill="x", padx=10, pady=(2, 7))
+        self.cycle_progress.pack(side="left", padx=(0, 10))
 
-        # Card 3: Timing & Throughput
-        c3 = ctk.CTkFrame(strip, fg_color=BG_PANEL, corner_radius=10, border_width=1, border_color=BORDER_SUBTLE)
-        c3.grid(row=0, column=2, sticky="nsew", padx=4)
-        ctk.CTkLabel(c3, text="SEQUENCE TIMING", font=self.fonts["caption_bold"], text_color=TEXT_MUTED).pack(
-            anchor="w", padx=10, pady=(5, 0)
-        )
         self.actions_lbl = ctk.CTkLabel(
-            c3, text="Cycle: 450ms | Elapsed: 0.0s", font=self.fonts["heading"], text_color=ACCENT_CYAN
+            strip,
+            text=f"Cycle: {self._cached_cycle_wait_ms}ms • 0.0s",
+            font=self.fonts["mono_small_bold"],
+            text_color=ACCENT_CYAN,
         )
-        self.actions_lbl.pack(anchor="w", padx=10, pady=(0, 0))
-        self.rate_sub_lbl = ctk.CTkLabel(
-            c3, text="Governor: 5ms Anti-Flood Floor", font=self.fonts["small"], text_color=TEXT_SECONDARY
-        )
-        self.rate_sub_lbl.pack(anchor="w", padx=10, pady=(0, 5))
+        self.actions_lbl.pack(side="left", padx=(0, 8))
 
-        # Card 4: Cursor & Hotkeys
-        c4 = ctk.CTkFrame(strip, fg_color=BG_PANEL, corner_radius=10, border_width=1, border_color=BORDER_SUBTLE)
-        c4.grid(row=0, column=3, sticky="nsew", padx=(4, 0))
-        ctk.CTkLabel(c4, text="CURSOR & HOTKEYS", font=self.fonts["caption_bold"], text_color=TEXT_MUTED).pack(
-            anchor="w", padx=10, pady=(5, 0)
-        )
-        self.cursor_lbl = ctk.CTkLabel(c4, text="XY: (0, 0)", font=self.fonts["mono_metric"], text_color=TEXT_PRIMARY)
-        self.cursor_lbl.pack(anchor="w", padx=10, pady=(0, 0))
+        # Right Cluster: Live Cursor + Hotkeys
         self.hotkey_sub_lbl = ctk.CTkLabel(
-            c4,
+            strip,
             text=(
-                f"Run: {self.profile.start_stop_hotkey} | "
-                f"Rec: {self.profile.record_hotkey} | "
+                f"Run: {self.profile.start_stop_hotkey} • "
+                f"Rec: {self.profile.record_hotkey} • "
                 f"Panic: {self.profile.panic_hotkey}"
             ),
             font=self.fonts["small"],
             text_color=TEXT_SECONDARY,
         )
-        self.hotkey_sub_lbl.pack(anchor="w", padx=10, pady=(0, 5))
+        self.hotkey_sub_lbl.pack(side="right", padx=(8, 14))
+
+        ctk.CTkFrame(strip, fg_color=BORDER_SUBTLE, width=1, height=20).pack(side="right", padx=6)
+
+        self.cursor_lbl = ctk.CTkLabel(
+            strip, text="XY: (0, 0)", font=self.fonts["mono_small_bold"], text_color=TEXT_PRIMARY
+        )
+        self.cursor_lbl.pack(side="right", padx=(6, 6))
 
     def _build_quick_forge_bar(self, parent: ctk.CTkFrame) -> None:
         qbar = ctk.CTkFrame(parent, fg_color=BG_PANEL, corner_radius=10, border_width=1, border_color=BORDER_SUBTLE)
-        qbar.pack(fill="x", padx=14, pady=(2, 4))
+        qbar.pack(fill="x", padx=14, pady=(0, 5))
 
         top_row = ctk.CTkFrame(qbar, fg_color="transparent")
-        top_row.pack(fill="x", padx=10, pady=(6, 3))
+        top_row.pack(fill="x", padx=10, pady=(7, 4))
 
         ctk.CTkLabel(
             top_row,
-            text="Quick-Forge:",
-            font=self.fonts["mono_bold"],
+            text="Sequence DSL",
+            font=self.fonts["small_bold"],
             text_color=ACCENT_PRIMARY,
-        ).pack(side="left", padx=(2, 6))
+        ).pack(side="left", padx=(2, 8))
 
         self.dsl_entry = ctk.CTkEntry(
             top_row,
@@ -1333,14 +1263,14 @@ class KeyForgeApp(ctk.CTk):
 
         # Quick Templates Row
         chips_row = ctk.CTkFrame(qbar, fg_color="transparent")
-        chips_row.pack(fill="x", padx=10, pady=(0, 5))
+        chips_row.pack(fill="x", padx=10, pady=(0, 6))
         ctk.CTkLabel(chips_row, text="Templates:", font=self.fonts["small"], text_color=TEXT_MUTED).pack(
             side="left", padx=(2, 6)
         )
 
         templates = [
             ("E -> 200ms -> Click -> 1", "Press E -> Wait 200ms -> Click -> Press 1"),
-            ("20 CPS Clicker", "Click -> Wait 45ms ±10ms"),
+            ("Copy & Paste Tab", "Press Ctrl+C -> Wait 80ms -> Press Tab -> Wait 80ms -> Press Ctrl+V"),
             ("3x Repeat Block", "Repeat 3 { Press F -> Wait 120ms ±15ms } -> Click"),
             ("Hold Shift + Click", "KeyDown Shift -> Click -> Wait 100ms -> KeyUp Shift"),
         ]
@@ -1537,61 +1467,111 @@ class KeyForgeApp(ctk.CTk):
         self._build_console_tab(tab_log)
 
     def _build_loop_and_hotkeys_tab(self, tab: ctk.CTkFrame) -> None:
-        card = ctk.CTkScrollableFrame(tab, fg_color=BG_PANEL, corner_radius=10)
-        card.pack(fill="both", expand=True, padx=2, pady=2)
+        card = ctk.CTkFrame(tab, fg_color=BG_PANEL, corner_radius=10)
+        card.pack(fill="both", expand=True, padx=4, pady=4)
 
         ctk.CTkLabel(card, text="Repeat Mode & Timing", font=self.fonts["subheading"], text_color=TEXT_PRIMARY).pack(
-            anchor="w", padx=10, pady=(6, 4)
+            anchor="w", padx=12, pady=(10, 4)
         )
 
         self.repeat_mode_menu = ctk.CTkSegmentedButton(
             card,
-            values=[m.value for m in RepeatMode],
+            values=[_STUDIO_REPEAT_LABELS[m] for m in RepeatMode],
             variable=self.repeat_mode_var,
             command=self._on_repeat_settings_changed,
-            height=26,
+            height=28,
+            fg_color=BG_ROOT,
             selected_color=ACCENT_PRIMARY,
+            unselected_color=BG_ELEVATED,
             font=self.fonts["small_bold"],
         )
-        self.repeat_mode_menu.pack(fill="x", padx=10, pady=2)
+        self.repeat_mode_menu.pack(fill="x", padx=12, pady=(0, 6))
 
-        r1 = ctk.CTkFrame(card, fg_color="transparent")
-        r1.pack(fill="x", padx=10, pady=3)
-        ctk.CTkLabel(r1, text="Repeat Count / Duration (s):", anchor="w", font=self.fonts["small"]).pack(side="left")
-        self.repeat_val_entry = ctk.CTkEntry(r1, width=84, height=26, fg_color=BG_INPUT, border_color=BORDER_SUBTLE)
+        self._studio_repeat_val_row = ctk.CTkFrame(card, fg_color="transparent")
+        self._studio_repeat_val_lbl = ctk.CTkLabel(
+            self._studio_repeat_val_row, text="Repeat Count:", anchor="w", font=self.fonts["small"]
+        )
+        self._studio_repeat_val_lbl.pack(side="left")
+        self.repeat_val_entry = ctk.CTkEntry(
+            self._studio_repeat_val_row, width=96, height=26, fg_color=BG_INPUT, border_color=BORDER_SUBTLE
+        )
         self.repeat_val_entry.insert(0, str(self.profile.repeat_count))
+        self.repeat_val_entry.bind("<Return>", lambda _e: self.sync_ui_settings_to_profile())
         self.repeat_val_entry.pack(side="right", padx=2)
 
-        r2 = ctk.CTkFrame(card, fg_color="transparent")
-        r2.pack(fill="x", padx=10, pady=3)
-        ctk.CTkLabel(r2, text="Inter-Cycle Delay (ms):", anchor="w", font=self.fonts["small"]).pack(side="left")
-        self.cycle_delay_entry = ctk.CTkEntry(r2, width=84, height=26, fg_color=BG_INPUT, border_color=BORDER_SUBTLE)
+        self._studio_cycle_delay_row = ctk.CTkFrame(card, fg_color="transparent")
+        self._studio_cycle_delay_row.pack(fill="x", padx=12, pady=3)
+        ctk.CTkLabel(
+            self._studio_cycle_delay_row, text="Inter-Cycle Delay (ms):", anchor="w", font=self.fonts["small"]
+        ).pack(side="left")
+        self.cycle_delay_entry = ctk.CTkEntry(
+            self._studio_cycle_delay_row, width=96, height=26, fg_color=BG_INPUT, border_color=BORDER_SUBTLE
+        )
         self.cycle_delay_entry.insert(0, str(self.profile.inter_cycle_delay_ms))
+        self.cycle_delay_entry.bind("<Return>", lambda _e: self.sync_ui_settings_to_profile())
         self.cycle_delay_entry.pack(side="right", padx=2)
 
+        self._update_studio_repeat_val_visibility(self.profile.repeat_mode)
+
         ctk.CTkLabel(card, text="Global Hotkey Bindings", font=self.fonts["subheading"], text_color=TEXT_PRIMARY).pack(
-            anchor="w", padx=10, pady=(8, 2)
+            anchor="w", padx=12, pady=(12, 4)
         )
 
         hk1 = ctk.CTkFrame(card, fg_color="transparent")
-        hk1.pack(fill="x", padx=10, pady=2)
+        hk1.pack(fill="x", padx=12, pady=3)
         ctk.CTkLabel(hk1, text="Start / Stop Hotkey:", anchor="w", font=self.fonts["small"]).pack(side="left")
-        self.hk_start_entry = ctk.CTkEntry(hk1, width=84, height=26, fg_color=BG_INPUT, border_color=BORDER_SUBTLE)
+        self.hk_start_bind_btn = ctk.CTkButton(
+            hk1,
+            text="Bind",
+            width=48,
+            height=26,
+            fg_color=BTN_NEUTRAL,
+            hover_color=BTN_NEUTRAL_HOVER,
+            font=self.fonts["small_bold"],
+            command=lambda: self.start_main_key_capture("hk_start"),
+        )
+        self.hk_start_bind_btn.pack(side="right", padx=(4, 2))
+        self.hk_start_entry = ctk.CTkEntry(hk1, width=76, height=26, fg_color=BG_INPUT, border_color=BORDER_SUBTLE)
         self.hk_start_entry.insert(0, self.profile.start_stop_hotkey)
+        self.hk_start_entry.bind("<Return>", lambda _e: self.sync_ui_settings_to_profile())
         self.hk_start_entry.pack(side="right", padx=2)
 
         hk2 = ctk.CTkFrame(card, fg_color="transparent")
-        hk2.pack(fill="x", padx=10, pady=2)
+        hk2.pack(fill="x", padx=12, pady=3)
         ctk.CTkLabel(hk2, text="Live Recorder Hotkey:", anchor="w", font=self.fonts["small"]).pack(side="left")
-        self.hk_rec_entry = ctk.CTkEntry(hk2, width=84, height=26, fg_color=BG_INPUT, border_color=BORDER_SUBTLE)
+        self.hk_rec_bind_btn = ctk.CTkButton(
+            hk2,
+            text="Bind",
+            width=48,
+            height=26,
+            fg_color=BTN_NEUTRAL,
+            hover_color=BTN_NEUTRAL_HOVER,
+            font=self.fonts["small_bold"],
+            command=lambda: self.start_main_key_capture("hk_rec"),
+        )
+        self.hk_rec_bind_btn.pack(side="right", padx=(4, 2))
+        self.hk_rec_entry = ctk.CTkEntry(hk2, width=76, height=26, fg_color=BG_INPUT, border_color=BORDER_SUBTLE)
         self.hk_rec_entry.insert(0, self.profile.record_hotkey)
+        self.hk_rec_entry.bind("<Return>", lambda _e: self.sync_ui_settings_to_profile())
         self.hk_rec_entry.pack(side="right", padx=2)
 
         hk3 = ctk.CTkFrame(card, fg_color="transparent")
-        hk3.pack(fill="x", padx=10, pady=2)
+        hk3.pack(fill="x", padx=12, pady=3)
         ctk.CTkLabel(hk3, text="Panic Stop Hotkey:", anchor="w", font=self.fonts["small"]).pack(side="left")
-        self.hk_panic_entry = ctk.CTkEntry(hk3, width=84, height=26, fg_color=BG_INPUT, border_color=BORDER_SUBTLE)
+        self.hk_panic_bind_btn = ctk.CTkButton(
+            hk3,
+            text="Bind",
+            width=48,
+            height=26,
+            fg_color=BTN_NEUTRAL,
+            hover_color=BTN_NEUTRAL_HOVER,
+            font=self.fonts["small_bold"],
+            command=lambda: self.start_main_key_capture("hk_panic"),
+        )
+        self.hk_panic_bind_btn.pack(side="right", padx=(4, 2))
+        self.hk_panic_entry = ctk.CTkEntry(hk3, width=76, height=26, fg_color=BG_INPUT, border_color=BORDER_SUBTLE)
         self.hk_panic_entry.insert(0, self.profile.panic_hotkey)
+        self.hk_panic_entry.bind("<Return>", lambda _e: self.sync_ui_settings_to_profile())
         self.hk_panic_entry.pack(side="right", padx=2)
 
         ctk.CTkButton(
@@ -1602,27 +1582,28 @@ class KeyForgeApp(ctk.CTk):
             hover_color=ACCENT_PRIMARY_HOVER,
             font=self.fonts["small_bold"],
             command=self.sync_ui_settings_to_profile,
-        ).pack(fill="x", padx=10, pady=(8, 6))
+        ).pack(fill="x", padx=12, pady=(12, 10))
 
     def _build_recorder_tab(self, tab: ctk.CTkFrame) -> None:
         rec_cfg = self.app_config.recorder_settings
-        card = ctk.CTkScrollableFrame(tab, fg_color=BG_PANEL, corner_radius=10)
-        card.pack(fill="both", expand=True, padx=2, pady=2)
+        card = ctk.CTkFrame(tab, fg_color=BG_PANEL, corner_radius=10)
+        card.pack(fill="both", expand=True, padx=4, pady=4)
 
         ctk.CTkLabel(card, text="Live Input Recorder", font=self.fonts["heading"], text_color=TEXT_PRIMARY).pack(
-            anchor="w", padx=10, pady=(6, 4)
+            anchor="w", padx=12, pady=(10, 6)
         )
 
         self.rec_toggle_btn = ctk.CTkButton(
             card,
             text=f"● Record Live Inputs ({self.profile.record_hotkey})",
-            fg_color=ACCENT_DANGER,
-            hover_color=ACCENT_DANGER_HOVER,
+            fg_color=BTN_DANGER_SUBTLE,
+            hover_color=ACCENT_DANGER,
+            text_color=BTN_DANGER_SUBTLE_TEXT,
             height=34,
             font=self.fonts["body_bold"],
             command=self.toggle_recording,
         )
-        self.rec_toggle_btn.pack(fill="x", padx=10, pady=4)
+        self.rec_toggle_btn.pack(fill="x", padx=12, pady=(0, 8))
 
         self.rec_delays_var = ctk.BooleanVar(value=bool(rec_cfg.get("record_delays", True)))
         ctk.CTkCheckBox(
@@ -1630,7 +1611,7 @@ class KeyForgeApp(ctk.CTk):
             text="Record delays between actions (>= 20ms)",
             variable=self.rec_delays_var,
             font=self.fonts["small"],
-        ).pack(anchor="w", padx=12, pady=4)
+        ).pack(anchor="w", padx=14, pady=4)
 
         self.rec_merge_var = ctk.BooleanVar(value=bool(rec_cfg.get("merge_key_taps", True)))
         ctk.CTkCheckBox(
@@ -1638,7 +1619,7 @@ class KeyForgeApp(ctk.CTk):
             text="Coalesce KeyDown + KeyUp into Press",
             variable=self.rec_merge_var,
             font=self.fonts["small"],
-        ).pack(anchor="w", padx=12, pady=4)
+        ).pack(anchor="w", padx=14, pady=4)
 
         self.rec_coords_var = ctk.BooleanVar(value=bool(rec_cfg.get("capture_click_coordinates", False)))
         ctk.CTkCheckBox(
@@ -1646,19 +1627,16 @@ class KeyForgeApp(ctk.CTk):
             text="Lock clicks to exact (X, Y) coordinates",
             variable=self.rec_coords_var,
             font=self.fonts["small"],
-        ).pack(anchor="w", padx=12, pady=4)
+        ).pack(anchor="w", padx=14, pady=4)
 
         ctk.CTkLabel(
             card,
-            text=(
-                "Synthetic inputs stamped with KeyForge's 0x4B465247 signature and your "
-                "control hotkeys are automatically filtered out."
-            ),
+            text="Recorded steps filter out KeyForge synthetic playback inputs and your control hotkeys.",
             text_color=TEXT_SECONDARY,
             font=self.fonts["small"],
-            wraplength=300,
+            wraplength=310,
             justify="left",
-        ).pack(anchor="w", padx=12, pady=(6, 6))
+        ).pack(anchor="w", padx=14, pady=(10, 8))
 
     def _build_security_tab(self, tab: ctk.CTkFrame) -> None:
         card = ctk.CTkFrame(tab, fg_color=BG_PANEL, corner_radius=10)
@@ -1730,11 +1708,10 @@ class KeyForgeApp(ctk.CTk):
         self._on_ui_mode_changed(mode_label)
 
     def _on_ui_mode_changed(self, selected_mode: str) -> None:
+        self.stop_main_key_capture()
         if selected_mode == "Studio" and self.simple_frame.winfo_manager():
             task_key = _LABEL_TO_SIMPLE_TASK.get(self.simple_task_var.get(), "sequence")
-            if task_key == "clicker":
-                self._apply_simple_clicker_to_profile(record_undo=False)
-            elif task_key == "spammer":
+            if task_key == "spammer":
                 self._apply_simple_spammer_to_profile(record_undo=False)
             if self.profile.repeat_mode != RepeatMode.INFINITE:
                 raw_val = self.simple_repeat_val_entry.get().strip()
@@ -1756,37 +1733,35 @@ class KeyForgeApp(ctk.CTk):
     def _on_simple_task_changed(self, selected_label: str) -> None:
         if self._suppress_simple_sync:
             return
+        self.stop_main_key_capture()
         task_key = _LABEL_TO_SIMPLE_TASK.get(selected_label, "sequence")
         self.app_config.simple_task = task_key
         self._show_simple_task_subpanel(task_key)
 
-        if task_key == "clicker":
-            self._apply_simple_clicker_to_profile()
-        elif task_key == "spammer":
+        if task_key == "spammer":
             self._apply_simple_spammer_to_profile()
         else:
             self._refresh_simple_sequence_summary()
         self._save_persistent_state()
 
     def _show_simple_task_subpanel(self, task_key: str) -> None:
-        for panel in (self.sc_panel, self.ss_panel, self.sq_panel):
+        for panel in (self.ss_panel, self.sq_panel):
             panel.pack_forget()
-        if task_key == "clicker":
-            self.sc_panel.pack(fill="both", expand=True)
-        elif task_key == "spammer":
+        if task_key == "spammer":
             self.ss_panel.pack(fill="both", expand=True)
         else:
             self.sq_panel.pack(fill="both", expand=True)
-
-    def _on_sc_slider_moved(self, val: float) -> None:
-        ms = max(20, int(round(val)))
-        self.sc_interval_lbl.configure(text=f"{ms} ms ({1000.0 / ms:.1f} CPS)")
-        self._schedule_simple_slider_commit("clicker")
 
     def _on_ss_slider_moved(self, val: float) -> None:
         ms = max(25, int(round(val)))
         self.ss_interval_lbl.configure(text=f"{ms} ms ({1000.0 / ms:.1f} / sec)")
         self._schedule_simple_slider_commit("spammer")
+
+    def _set_simple_spammer_interval(self, interval_ms: int) -> None:
+        ms = max(25, min(2000, int(interval_ms)))
+        self.ss_interval_slider.set(ms)
+        self.ss_interval_lbl.configure(text=f"{ms} ms ({1000.0 / ms:.1f} / sec)")
+        self._apply_simple_spammer_to_profile()
 
     def _schedule_simple_slider_commit(self, target: str) -> None:
         if self._simple_slider_after_id is not None:
@@ -1804,63 +1779,7 @@ class KeyForgeApp(ctk.CTk):
             self._simple_slider_after_id = None
         if self._closing:
             return
-        if target == "clicker":
-            self._apply_simple_clicker_to_profile(record_undo=False)
-        else:
-            self._apply_simple_spammer_to_profile(record_undo=False)
-
-    def _on_sc_loc_mode_changed(self, selected: str) -> None:
-        if selected == "Fixed XY":
-            self.sc_xy_row.pack(fill="x", padx=14, pady=(0, 10))
-        else:
-            self.sc_xy_row.pack_forget()
-        self._apply_simple_clicker_to_profile()
-
-    def _pick_simple_cursor_xy(self) -> None:
-        if IS_WINDOWS:
-            cx, cy = get_system_cursor_pos()
-        else:
-            cx, cy = self.winfo_pointerx(), self.winfo_pointery()
-        self.sc_x_entry.delete(0, "end")
-        self.sc_x_entry.insert(0, str(cx))
-        self.sc_y_entry.delete(0, "end")
-        self.sc_y_entry.insert(0, str(cy))
-        self._apply_simple_clicker_to_profile()
-
-    def _apply_simple_clicker_to_profile(self, record_undo: bool = True) -> bool:
-        try:
-            btn = MouseButton(self.sc_button_var.get().strip().lower())
-            ctype = ClickType(self.sc_click_type_var.get().strip().lower())
-            interval_ms = max(20, min(2000, int(round(self.sc_interval_slider.get()))))
-            hold_ms = 15
-            wait_ms = max(5, interval_ms - hold_ms)
-            jitter_ms = max(1, min(15, round(interval_ms * 0.1))) if self.sc_jitter_var.get() else 0
-
-            x: int | None = None
-            y: int | None = None
-            if self.sc_loc_mode_var.get() == "Fixed XY":
-                x = int(self.sc_x_entry.get().strip() or "0")
-                y = int(self.sc_y_entry.get().strip() or "0")
-
-            actions = [
-                make_mouse_click(btn, ctype, x=x, y=y, hold_ms=hold_ms, label="Auto Click"),
-                make_wait(wait_ms, jitter_ms=jitter_ms, label="Click Interval"),
-            ]
-            if record_undo:
-                self._record_undo_snapshot()
-            self.profile.name = f"Auto-Clicker ({btn.value.capitalize()} {1000.0 / interval_ms:.1f} CPS)"
-            self.profile.inter_cycle_delay_ms = 0
-            self.profile.actions = actions
-            self.profile.validate()
-            self.cycle_delay_entry.delete(0, "end")
-            self.cycle_delay_entry.insert(0, "0")
-            self._capture_simple_controls_to_config()
-            self._on_sequence_mutated(sync_simple=False)
-            self._refresh_simple_sequence_summary()
-            return True
-        except Exception as exc:
-            self.show_toast(f"Auto-Clicker setting error: {exc}", level="error")
-            return False
+        self._apply_simple_spammer_to_profile(record_undo=False)
 
     def _apply_simple_spammer_to_profile(self, record_undo: bool = True) -> bool:
         try:
@@ -1902,7 +1821,7 @@ class KeyForgeApp(ctk.CTk):
 
     def _on_simple_repeat_mode_changed(self, selected_label: str) -> None:
         mode = _LABEL_TO_REPEAT_MODE.get(selected_label, RepeatMode.INFINITE)
-        self.repeat_mode_var.set(mode.value)
+        self.repeat_mode_var.set(_STUDIO_REPEAT_LABELS.get(mode, "Infinite"))
         if mode == RepeatMode.DURATION:
             self.repeat_val_entry.delete(0, "end")
             self.repeat_val_entry.insert(0, str(self.profile.repeat_duration_s))
@@ -1914,6 +1833,7 @@ class KeyForgeApp(ctk.CTk):
             self.simple_repeat_val_entry.delete(0, "end")
             self.simple_repeat_val_entry.insert(0, str(self.profile.repeat_count))
         self._update_simple_repeat_val_visibility(mode)
+        self._update_studio_repeat_val_visibility(mode)
         self.sync_ui_settings_to_profile()
 
     def _on_simple_repeat_val_commit(self) -> None:
@@ -1930,7 +1850,7 @@ class KeyForgeApp(ctk.CTk):
             lbl_text = "Times:" if mode == RepeatMode.COUNT else "Seconds:"
             self.simple_repeat_val_lbl.configure(text=lbl_text)
             if not self.simple_repeat_val_row.winfo_manager():
-                self.simple_repeat_val_row.pack(fill="x", padx=14, pady=(0, 8))
+                self.simple_repeat_val_row.pack(fill="x", padx=12, pady=(0, 8), before=self._simple_dry_run_switch)
 
     def _on_dry_run_toggled(self) -> None:
         self.app_config.dry_run = bool(self.dry_run_var.get())
@@ -1974,34 +1894,6 @@ class KeyForgeApp(ctk.CTk):
                 len(acts) == 2
                 and acts[0].enabled
                 and acts[1].enabled
-                and acts[0].action_type == ActionType.MOUSE_CLICK
-                and acts[1].action_type == ActionType.WAIT
-                and acts[0].button in (MouseButton.LEFT, MouseButton.RIGHT, MouseButton.MIDDLE)
-                and acts[0].click_type in (ClickType.SINGLE, ClickType.DOUBLE)
-            ):
-                task_key = "clicker"
-                click_act, wait_act = acts[0], acts[1]
-                self.sc_button_var.set(click_act.button.value.capitalize())
-                self.sc_click_type_var.set(click_act.click_type.value.capitalize())
-                total_ms = max(20, min(2000, click_act.hold_ms + wait_act.wait_ms))
-                self.sc_interval_slider.set(total_ms)
-                self.sc_interval_lbl.configure(text=f"{total_ms} ms ({1000.0 / total_ms:.1f} CPS)")
-                self.sc_jitter_var.set(wait_act.jitter_ms > 0)
-                if click_act.x is not None and click_act.y is not None:
-                    self.sc_loc_mode_var.set("Fixed XY")
-                    self.sc_x_entry.delete(0, "end")
-                    self.sc_x_entry.insert(0, str(click_act.x))
-                    self.sc_y_entry.delete(0, "end")
-                    self.sc_y_entry.insert(0, str(click_act.y))
-                    if not self.sc_xy_row.winfo_manager():
-                        self.sc_xy_row.pack(fill="x", padx=14, pady=(0, 10))
-                else:
-                    self.sc_loc_mode_var.set("At Cursor")
-                    self.sc_xy_row.pack_forget()
-            elif (
-                len(acts) == 2
-                and acts[0].enabled
-                and acts[1].enabled
                 and acts[0].action_type == ActionType.KEY_PRESS
                 and acts[1].action_type == ActionType.WAIT
             ):
@@ -2020,6 +1912,117 @@ class KeyForgeApp(ctk.CTk):
             self._suppress_simple_sync = False
 
     # -------------------------------------------------------------------------
+    # Interactive Click-to-Bind Key Capture & Step Keyboard Workflow
+    # -------------------------------------------------------------------------
+
+    def _capture_button_for_target(self, target: str) -> tuple[ctk.CTkButton | None, str]:
+        mapping = {
+            "simple_spammer": (getattr(self, "ss_bind_key_btn", None), "Bind Key"),
+            "hk_start": (getattr(self, "hk_start_bind_btn", None), "Bind"),
+            "hk_rec": (getattr(self, "hk_rec_bind_btn", None), "Bind"),
+            "hk_panic": (getattr(self, "hk_panic_bind_btn", None), "Bind"),
+        }
+        return mapping.get(target, (None, "Bind"))
+
+    def start_main_key_capture(self, target: str) -> None:
+        """Listen for the next key press/combo and assign it to ``target``."""
+        if self._closing:
+            return
+        if self._key_capture_target == target:
+            self.stop_main_key_capture()
+            return
+        self.stop_main_key_capture()
+        btn, _ = self._capture_button_for_target(target)
+        if btn is None:
+            return
+        self._key_capture_target = target
+        self._key_capture_pending_mod = None
+        btn.configure(
+            text="Press...",
+            fg_color=ACCENT_WARNING,
+            hover_color=ACCENT_WARNING_HOVER,
+            text_color="#090A0D",
+        )
+        with contextlib.suppress(Exception):
+            btn.focus_set()
+        self.bind("<KeyPress>", self._on_main_capture_keypress)
+        self.bind("<KeyRelease>", self._on_main_capture_keyrelease)
+
+    def stop_main_key_capture(self) -> None:
+        target = self._key_capture_target
+        self._key_capture_target = None
+        self._key_capture_pending_mod = None
+        with contextlib.suppress(Exception):
+            self.unbind("<KeyPress>")
+            self.unbind("<KeyRelease>")
+        if target is not None:
+            btn, rest_label = self._capture_button_for_target(target)
+            if btn is not None and btn.winfo_exists():
+                btn.configure(
+                    text=rest_label,
+                    fg_color=BTN_NEUTRAL,
+                    hover_color=BTN_NEUTRAL_HOVER,
+                    text_color=TEXT_PRIMARY,
+                )
+
+    def apply_main_captured_key(self, target: str, combo_str: str) -> None:
+        """Apply a captured key/combo directly to the target control."""
+        self.stop_main_key_capture()
+        if target == "simple_spammer":
+            self.ss_key_combo.set(combo_str)
+            self._apply_simple_spammer_to_profile()
+            self.show_toast(f"Bound Key Repeater to [{combo_str}].", level="success")
+        elif target == "hk_start":
+            self.hk_start_entry.delete(0, "end")
+            self.hk_start_entry.insert(0, combo_str)
+            if self.sync_ui_settings_to_profile():
+                self.show_toast(f"Start / Stop hotkey set to [{combo_str}].", level="success")
+        elif target == "hk_rec":
+            self.hk_rec_entry.delete(0, "end")
+            self.hk_rec_entry.insert(0, combo_str)
+            if self.sync_ui_settings_to_profile():
+                self.show_toast(f"Recorder hotkey set to [{combo_str}].", level="success")
+        elif target == "hk_panic":
+            self.hk_panic_entry.delete(0, "end")
+            self.hk_panic_entry.insert(0, combo_str)
+            if self.sync_ui_settings_to_profile():
+                self.show_toast(f"Panic Stop hotkey set to [{combo_str}].", level="success")
+
+    def _on_main_capture_keypress(self, event: object) -> str | None:
+        if self._key_capture_target is None:
+            return None
+        keysym = str(getattr(event, "keysym", "") or "")
+        state = int(getattr(event, "state", 0) or 0)
+        keycode = int(getattr(event, "keycode", 0) or 0)
+        combo = format_captured_key_combo(keysym, state=state, keycode=keycode)
+        if combo is None:
+            if finalize_modifier_only_capture(keysym, keycode=keycode):
+                self._key_capture_pending_mod = keysym
+            return "break"
+        target = self._key_capture_target
+        self.apply_main_captured_key(target, combo)
+        return "break"
+
+    def _on_main_capture_keyrelease(self, event: object) -> str | None:
+        if self._key_capture_target is None:
+            return None
+        keysym = str(getattr(event, "keysym", "") or "")
+        keycode = int(getattr(event, "keycode", 0) or 0)
+        if self._key_capture_pending_mod and keysym == self._key_capture_pending_mod:
+            mod_name = finalize_modifier_only_capture(keysym, keycode=keycode)
+            if mod_name:
+                target = self._key_capture_target
+                self.apply_main_captured_key(target, mod_name)
+                return "break"
+        return None
+
+    def _on_main_escape(self, _event: object = None) -> str | None:
+        if self._key_capture_target is not None:
+            self.stop_main_key_capture()
+            return "break"
+        return None
+
+    # -------------------------------------------------------------------------
     # Undo / Redo & Sequence Builder Operations
     # -------------------------------------------------------------------------
 
@@ -2030,15 +2033,139 @@ class KeyForgeApp(ctk.CTk):
         focused = self.focus_get()
         return isinstance(focused, (tk.Entry, tk.Text))
 
-    def _on_ctrl_z(self, event: object = None) -> None:
-        if self._is_text_input_focused(event):
-            return
-        self.undo_step_change()
+    def _can_handle_step_shortcut(self, event: object = None) -> bool:
+        if self._closing or self.grab_current() is not None:
+            return False
+        if self._key_capture_target is not None:
+            return False
+        if self.ui_mode_var.get() != "Studio":
+            return False
+        return not self._is_text_input_focused(event)
 
-    def _on_ctrl_y(self, event: object = None) -> None:
+    def _on_ctrl_z(self, event: object = None) -> str | None:
+        if self._key_capture_target is not None:
+            return self._on_main_capture_keypress(event)
         if self._is_text_input_focused(event):
-            return
+            return None
+        self.undo_step_change()
+        return None
+
+    def _on_ctrl_y(self, event: object = None) -> str | None:
+        if self._key_capture_target is not None:
+            return self._on_main_capture_keypress(event)
+        if self._is_text_input_focused(event):
+            return None
         self.redo_step_change()
+        return None
+
+    def _on_ctrl_d(self, event: object = None) -> str | None:
+        if self._key_capture_target is not None:
+            return self._on_main_capture_keypress(event)
+        if not self._can_handle_step_shortcut(event):
+            return None
+        self.duplicate_selected_step()
+        return "break"
+
+    def _on_delete_key(self, event: object = None) -> str | None:
+        if self._key_capture_target is not None:
+            return self._on_main_capture_keypress(event)
+        if not self._can_handle_step_shortcut(event):
+            return None
+        self.delete_selected_step()
+        return "break"
+
+    def _on_space_key(self, event: object = None) -> str | None:
+        if self._key_capture_target is not None:
+            return self._on_main_capture_keypress(event)
+        if not self._can_handle_step_shortcut(event):
+            return None
+        self.toggle_selected_step_enabled()
+        return "break"
+
+    def _on_alt_up(self, event: object = None) -> str | None:
+        if self._key_capture_target is not None:
+            return self._on_main_capture_keypress(event)
+        if not self._can_handle_step_shortcut(event):
+            return None
+        self.move_selected_step_up()
+        return "break"
+
+    def _on_alt_down(self, event: object = None) -> str | None:
+        if self._key_capture_target is not None:
+            return self._on_main_capture_keypress(event)
+        if not self._can_handle_step_shortcut(event):
+            return None
+        self.move_selected_step_down()
+        return "break"
+
+    def _on_arrow_up(self, event: object = None) -> str | None:
+        if self._key_capture_target is not None:
+            return self._on_main_capture_keypress(event)
+        if not self._can_handle_step_shortcut(event) or not self.profile.actions:
+            return None
+        idx = 0 if self._selected_step_index is None else max(0, self._selected_step_index - 1)
+        self.select_step(idx)
+        return "break"
+
+    def _on_arrow_down(self, event: object = None) -> str | None:
+        if self._key_capture_target is not None:
+            return self._on_main_capture_keypress(event)
+        if not self._can_handle_step_shortcut(event) or not self.profile.actions:
+            return None
+        max_idx = len(self.profile.actions) - 1
+        idx = 0 if self._selected_step_index is None else min(max_idx, self._selected_step_index + 1)
+        self.select_step(idx)
+        return "break"
+
+    def select_step(self, index: int | None) -> int | None:
+        """Select a step index in the Studio timeline and update border highlights."""
+        actions = self.profile.actions
+        if not actions or index is None:
+            self._selected_step_index = None
+        else:
+            self._selected_step_index = max(0, min(index, len(actions) - 1))
+
+        selected_id = (
+            actions[self._selected_step_index].id
+            if self._selected_step_index is not None and 0 <= self._selected_step_index < len(actions)
+            else None
+        )
+        for act_id, frame in self._step_row_frames.items():
+            with contextlib.suppress(Exception):
+                if frame.winfo_exists():
+                    frame.configure(border_color=BORDER_FOCUS if act_id == selected_id else BORDER_SUBTLE)
+        return self._selected_step_index
+
+    def delete_selected_step(self) -> bool:
+        if self._selected_step_index is None or not (0 <= self._selected_step_index < len(self.profile.actions)):
+            return False
+        self.delete_step(self._selected_step_index)
+        return True
+
+    def duplicate_selected_step(self) -> bool:
+        if self._selected_step_index is None or not (0 <= self._selected_step_index < len(self.profile.actions)):
+            return False
+        self.duplicate_step(self._selected_step_index)
+        return True
+
+    def toggle_selected_step_enabled(self) -> bool:
+        if self._selected_step_index is None or not (0 <= self._selected_step_index < len(self.profile.actions)):
+            return False
+        act = self.profile.actions[self._selected_step_index]
+        self._on_toggle_step_enabled(act, not act.enabled)
+        return True
+
+    def move_selected_step_up(self) -> bool:
+        if self._selected_step_index is None or self._selected_step_index <= 0:
+            return False
+        self.move_step_up(self._selected_step_index)
+        return True
+
+    def move_selected_step_down(self) -> bool:
+        if self._selected_step_index is None or self._selected_step_index >= len(self.profile.actions) - 1:
+            return False
+        self.move_step_down(self._selected_step_index)
+        return True
 
     def _snapshot_actions(self) -> list[dict[str, Any]]:
         return [act.to_dict() for act in self.profile.actions]
@@ -2131,24 +2258,26 @@ class KeyForgeApp(ctk.CTk):
     @staticmethod
     def _step_subtitle(act: MacroAction) -> str:
         if act.action_type == ActionType.KEY_PRESS:
-            return f"Hold: {act.hold_ms}ms | Mode: Tap"
-        if act.action_type in (ActionType.KEY_DOWN, ActionType.KEY_UP):
-            return "Explicit State Transition | Auto-Sanitized on Stop"
+            return f"Tap • {act.hold_ms}ms hold"
+        if act.action_type == ActionType.KEY_DOWN:
+            return "Hold key down"
+        if act.action_type == ActionType.KEY_UP:
+            return "Release key up"
         if act.action_type == ActionType.WAIT:
             if act.jitter_ms > 0:
                 lo = max(1, act.wait_ms - act.jitter_ms)
                 hi = act.wait_ms + act.jitter_ms
-                return f"Humanized Range: {lo}ms – {hi}ms"
-            return "Deterministic Delay"
+                return f"Randomized {lo}–{hi}ms"
+            return "Exact delay"
         if act.action_type == ActionType.MOUSE_CLICK:
-            target = f"Fixed ({act.x}, {act.y})" if act.x is not None else "Dynamic Live Cursor"
-            return f"Hold: {act.hold_ms}ms | Target: {target}"
+            target = f"Fixed ({act.x}, {act.y})" if act.x is not None else "At cursor"
+            return f"{target} • {act.hold_ms}ms hold"
         if act.action_type == ActionType.MOUSE_MOVE:
-            return f"Coordinate Space: {act.move_mode.value.capitalize()}"
+            return f"{act.move_mode.value.capitalize()} coordinates"
         if act.action_type == ActionType.MOUSE_SCROLL:
-            return f"Wheel Delta: dY={act.scroll_dy}, dX={act.scroll_dx}"
+            return f"Wheel dY={act.scroll_dy}, dX={act.scroll_dx}"
         if act.action_type == ActionType.REPEAT_BLOCK:
-            return f"{len(act.sub_actions)} inner step(s) × {act.repeat_count} iterations"
+            return f"{len(act.sub_actions)} inner steps × {act.repeat_count} loops"
         return ""
 
     @staticmethod
@@ -2185,6 +2314,7 @@ class KeyForgeApp(ctk.CTk):
         self._update_cached_cycle_metrics()
 
         if not actions:
+            self._selected_step_index = None
             ctk.CTkLabel(
                 self.sequence_scroll,
                 text=(
@@ -2196,6 +2326,9 @@ class KeyForgeApp(ctk.CTk):
             ).pack(pady=52)
             return
 
+        if self._selected_step_index is not None:
+            self._selected_step_index = max(0, min(self._selected_step_index, len(actions) - 1))
+
         for idx, act in enumerate(actions):
             if self._filter_query:
                 haystack = f"{act.badge_text()} {act.describe()} {act.label}".lower()
@@ -2203,6 +2336,7 @@ class KeyForgeApp(ctk.CTk):
                     continue
 
             is_active = act.id == self._active_step_id
+            is_selected = idx == self._selected_step_index
             row_bg = BG_CARD_ACTIVE if is_active else BG_CARD
             row = ctk.CTkFrame(
                 self.sequence_scroll,
@@ -2210,7 +2344,7 @@ class KeyForgeApp(ctk.CTk):
                 corner_radius=8,
                 height=50,
                 border_width=1,
-                border_color=BORDER_SUBTLE,
+                border_color=BORDER_FOCUS if is_selected else BORDER_SUBTLE,
             )
             row.pack_propagate(False)
             row.pack(fill="x", pady=3, padx=2)
@@ -2220,13 +2354,14 @@ class KeyForgeApp(ctk.CTk):
             stripe = ctk.CTkFrame(row, fg_color=get_stripe_color(act.action_type), width=4, height=40, corner_radius=2)
             stripe.pack(side="left", fill="y", padx=(2, 6), pady=4)
 
-            ctk.CTkLabel(
+            idx_lbl = ctk.CTkLabel(
                 row,
                 text=f"#{idx + 1:02d}",
                 width=32,
                 font=self.fonts["step_idx"],
                 text_color=TEXT_SECONDARY,
-            ).pack(side="left", padx=(0, 2))
+            )
+            idx_lbl.pack(side="left", padx=(0, 2))
 
             en_var = ctk.BooleanVar(value=act.enabled)
             ctk.CTkCheckBox(
@@ -2240,7 +2375,7 @@ class KeyForgeApp(ctk.CTk):
             ).pack(side="left", padx=2)
 
             badge_bg, badge_fg = get_badge_colors(act.action_type)
-            ctk.CTkLabel(
+            badge_lbl = ctk.CTkLabel(
                 row,
                 text=act.badge_text(),
                 fg_color=badge_bg,
@@ -2249,7 +2384,8 @@ class KeyForgeApp(ctk.CTk):
                 width=58,
                 height=24,
                 font=self.fonts["step_badge"],
-            ).pack(side="left", padx=5)
+            )
+            badge_lbl.pack(side="left", padx=5)
 
             # 2. Right fixed controls packed BEFORE text_col so long titles NEVER clip action buttons!
             ctk.CTkButton(
@@ -2335,6 +2471,7 @@ class KeyForgeApp(ctk.CTk):
             title_lbl.pack(fill="x", anchor="w")
 
             sub_text = self._step_subtitle(act)
+            sub_lbl = None
             if sub_text:
                 sub_lbl = ctk.CTkLabel(
                     text_col,
@@ -2347,10 +2484,16 @@ class KeyForgeApp(ctk.CTk):
                 sub_lbl.pack(fill="x", anchor="w")
                 sub_lbl.bind("<Double-Button-1>", lambda _e, i=idx: self.open_edit_step_dialog(i))
 
+            for target_widget in [w for w in (row, idx_lbl, badge_lbl, text_col, title_lbl, sub_lbl) if w is not None]:
+                target_widget.bind("<Button-1>", lambda _e, i=idx: self._on_row_clicked(i))
             row.bind("<Enter>", lambda _e, r=row, aid=act.id: self._on_row_hover(r, aid, True))
             row.bind("<Leave>", lambda _e, r=row, aid=act.id: self._on_row_hover(r, aid, False))
             row.bind("<Double-Button-1>", lambda _e, i=idx: self.open_edit_step_dialog(i))
             title_lbl.bind("<Double-Button-1>", lambda _e, i=idx: self.open_edit_step_dialog(i))
+
+    def _on_row_clicked(self, index: int) -> None:
+        self.focus_set()
+        self.select_step(index)
 
     def _on_row_hover(self, row: ctk.CTkFrame, action_id: str, entering: bool) -> None:
         if action_id == self._active_step_id:
@@ -2382,6 +2525,7 @@ class KeyForgeApp(ctk.CTk):
     def add_step(self, action: MacroAction) -> None:
         self._record_undo_snapshot()
         self.profile.actions.append(action)
+        self._selected_step_index = len(self.profile.actions) - 1
         self._on_sequence_mutated()
         self._log_event(f"Added step: {action.describe()}")
 
@@ -2389,6 +2533,10 @@ class KeyForgeApp(ctk.CTk):
         if 0 <= index < len(self.profile.actions):
             self._record_undo_snapshot()
             removed = self.profile.actions.pop(index)
+            if not self.profile.actions:
+                self._selected_step_index = None
+            else:
+                self._selected_step_index = min(index, len(self.profile.actions) - 1)
             self._on_sequence_mutated()
             self._log_event(f"Deleted step #{index + 1}: {removed.describe()}")
 
@@ -2397,6 +2545,7 @@ class KeyForgeApp(ctk.CTk):
             self._record_undo_snapshot()
             cloned = self.profile.actions[index].clone()
             self.profile.actions.insert(index + 1, cloned)
+            self._selected_step_index = index + 1
             self._on_sequence_mutated()
             self._log_event(f"Duplicated step #{index + 1}: {cloned.describe()}")
 
@@ -2405,6 +2554,7 @@ class KeyForgeApp(ctk.CTk):
             self._record_undo_snapshot()
             acts = self.profile.actions
             acts[index - 1], acts[index] = acts[index], acts[index - 1]
+            self._selected_step_index = index - 1
             self._on_sequence_mutated()
 
     def move_step_down(self, index: int) -> None:
@@ -2412,6 +2562,7 @@ class KeyForgeApp(ctk.CTk):
             self._record_undo_snapshot()
             acts = self.profile.actions
             acts[index + 1], acts[index] = acts[index], acts[index + 1]
+            self._selected_step_index = index + 1
             self._on_sequence_mutated()
 
     def clear_all_steps(self) -> None:
@@ -2419,6 +2570,7 @@ class KeyForgeApp(ctk.CTk):
             self.executor.stop()
         self._record_undo_snapshot()
         self.profile.actions.clear()
+        self._selected_step_index = None
         self._on_sequence_mutated()
         self._log_event("Cleared all steps from sequence.")
 
@@ -2477,8 +2629,8 @@ class KeyForgeApp(ctk.CTk):
     def _refresh_hotkey_displays(self) -> None:
         self.hotkey_sub_lbl.configure(
             text=(
-                f"Run: {self.profile.start_stop_hotkey} | "
-                f"Rec: {self.profile.record_hotkey} | "
+                f"Run: {self.profile.start_stop_hotkey} • "
+                f"Rec: {self.profile.record_hotkey} • "
                 f"Panic: {self.profile.panic_hotkey}"
             )
         )
@@ -2497,8 +2649,20 @@ class KeyForgeApp(ctk.CTk):
         self._tick_cache.pop("simple_run_btn", None)
         self._update_run_button_ui()
 
+    def _update_studio_repeat_val_visibility(self, mode: RepeatMode) -> None:
+        if not hasattr(self, "_studio_repeat_val_row"):
+            return
+        if mode == RepeatMode.INFINITE:
+            self._studio_repeat_val_row.pack_forget()
+        else:
+            lbl_text = "Repeat Count:" if mode == RepeatMode.COUNT else "Duration (s):"
+            self._studio_repeat_val_lbl.configure(text=lbl_text)
+            if not self._studio_repeat_val_row.winfo_manager():
+                self._studio_repeat_val_row.pack(fill="x", padx=12, pady=3, before=self._studio_cycle_delay_row)
+
     def sync_profile_settings_to_ui(self) -> None:
-        self.repeat_mode_var.set(self.profile.repeat_mode.value)
+        self.repeat_mode_var.set(_STUDIO_REPEAT_LABELS.get(self.profile.repeat_mode, "Infinite"))
+        self._update_studio_repeat_val_visibility(self.profile.repeat_mode)
         val_str = (
             str(self.profile.repeat_duration_s)
             if self.profile.repeat_mode == RepeatMode.DURATION
@@ -2520,7 +2684,9 @@ class KeyForgeApp(ctk.CTk):
 
     def sync_ui_settings_to_profile(self) -> bool:
         try:
-            mode = RepeatMode(self.repeat_mode_var.get())
+            mode = _parse_repeat_mode(self.repeat_mode_var.get())
+            self.repeat_mode_var.set(_STUDIO_REPEAT_LABELS.get(mode, "Infinite"))
+            self._update_studio_repeat_val_visibility(mode)
             self.profile.repeat_mode = mode
 
             # Read repeat value from Simple Mode entry if Simple Mode is currently active and focused/visible
@@ -2566,8 +2732,20 @@ class KeyForgeApp(ctk.CTk):
             return False
 
     def _on_repeat_settings_changed(self, selected: str) -> None:
-        mode = RepeatMode(selected)
+        mode = _parse_repeat_mode(selected)
+        self.repeat_mode_var.set(_STUDIO_REPEAT_LABELS.get(mode, "Infinite"))
         self.simple_repeat_mode_var.set(_SIMPLE_REPEAT_LABELS.get(mode, "Forever"))
+        if mode == RepeatMode.DURATION:
+            self.repeat_val_entry.delete(0, "end")
+            self.repeat_val_entry.insert(0, str(self.profile.repeat_duration_s))
+            self.simple_repeat_val_entry.delete(0, "end")
+            self.simple_repeat_val_entry.insert(0, str(self.profile.repeat_duration_s))
+        elif mode == RepeatMode.COUNT:
+            self.repeat_val_entry.delete(0, "end")
+            self.repeat_val_entry.insert(0, str(self.profile.repeat_count))
+            self.simple_repeat_val_entry.delete(0, "end")
+            self.simple_repeat_val_entry.insert(0, str(self.profile.repeat_count))
+        self._update_studio_repeat_val_visibility(mode)
         self._update_simple_repeat_val_visibility(mode)
         self.sync_ui_settings_to_profile()
 
@@ -2598,11 +2776,9 @@ class KeyForgeApp(ctk.CTk):
             self.show_toast(msg, level="warning")
             return
 
-        # Commit any pending Simple Mode text input (e.g., key combo or XY) before starting
+        # Commit any pending Simple Mode text input before starting
         if self.ui_mode_var.get() == "Simple":
             task_key = _LABEL_TO_SIMPLE_TASK.get(self.simple_task_var.get(), "sequence")
-            if task_key == "clicker" and not self._apply_simple_clicker_to_profile(record_undo=False):
-                return
             if task_key == "spammer" and not self._apply_simple_spammer_to_profile(record_undo=False):
                 return
 
@@ -2706,8 +2882,9 @@ class KeyForgeApp(ctk.CTk):
             recorded = self.recorder.stop()
             self.rec_toggle_btn.configure(
                 text=f"● Record Live Inputs ({self.profile.record_hotkey})",
-                fg_color=ACCENT_DANGER,
-                hover_color=ACCENT_DANGER_HOVER,
+                fg_color=BTN_DANGER_SUBTLE,
+                hover_color=ACCENT_DANGER,
+                text_color=BTN_DANGER_SUBTLE_TEXT,
             )
             if recorded:
                 self._record_undo_snapshot()
@@ -2751,10 +2928,9 @@ class KeyForgeApp(ctk.CTk):
             self.preset_menu.configure(values=list(self.presets.keys()))
 
     def action_save_custom_preset(self, preset_name: str | None = None) -> bool:
+        self.stop_main_key_capture()
         if self.ui_mode_var.get() == "Simple":
             task_key = _LABEL_TO_SIMPLE_TASK.get(self.simple_task_var.get(), "sequence")
-            if task_key == "clicker" and not self._apply_simple_clicker_to_profile(record_undo=False):
-                return False
             if task_key == "spammer" and not self._apply_simple_spammer_to_profile(record_undo=False):
                 return False
         elif not self.sync_ui_settings_to_profile():
@@ -2950,9 +3126,9 @@ class KeyForgeApp(ctk.CTk):
             )
         else:
             self.audit_badge.configure(
-                text="Audit OK",
-                fg_color=BADGE_OK_BG,
-                text_color=BADGE_OK_FG,
+                text="Verified",
+                fg_color=BG_ELEVATED,
+                text_color=ACCENT_SUCCESS,
             )
 
         # Defer heavy SHA-256 hashing & textbox rebuild unless Security tab is currently visible
@@ -3325,7 +3501,6 @@ class KeyForgeApp(ctk.CTk):
             self._log_event(f"[Execution Error] {telem.last_error}")
             self.show_toast(f"Execution Error: {telem.last_error}", level="error")
 
-        state_text = f"● {telem.state.value.upper()}"
         state_color = {
             ExecutorState.IDLE: ACCENT_SUCCESS,
             ExecutorState.RUNNING: ACCENT_PRIMARY,
@@ -3342,12 +3517,12 @@ class KeyForgeApp(ctk.CTk):
             ExecutorState.ERROR: "● Error",
         }[telem.state]
 
-        if self._tick_cache.get("state") != (state_text, state_color):
-            self._tick_cache["state"] = (state_text, state_color)
-            self.status_lbl.configure(text=state_text, text_color=state_color)
+        if self._tick_cache.get("state") != (simple_status_text, state_color):
+            self._tick_cache["state"] = (simple_status_text, state_color)
+            self.status_lbl.configure(text=simple_status_text, text_color=state_color)
             self.simple_status_lbl.configure(text=simple_status_text, text_color=state_color)
 
-        mode_text = f"Mode: {'Dry-Run Simulation' if self.dry_run_var.get() else 'Live OS Injection'}"
+        mode_text = "Dry-Run" if self.dry_run_var.get() else "Live Input"
         if self._tick_cache.get("mode_text") != mode_text:
             self._tick_cache["mode_text"] = mode_text
             self.mode_sub_lbl.configure(text=mode_text)
@@ -3376,7 +3551,7 @@ class KeyForgeApp(ctk.CTk):
             self._tick_cache["progress"] = ratio_q
             self.cycle_progress.set(ratio)
 
-        actions_text = f"Cycle: {self._cached_cycle_wait_ms}ms | Elapsed: {telem.elapsed_seconds:.1f}s"
+        actions_text = f"Cycle: {self._cached_cycle_wait_ms}ms • {telem.elapsed_seconds:.1f}s"
         if self._tick_cache.get("actions_text") != actions_text:
             self._tick_cache["actions_text"] = actions_text
             self.actions_lbl.configure(text=actions_text)
@@ -3421,6 +3596,7 @@ class KeyForgeApp(ctk.CTk):
             return
         self._closing = True
         self._startup_update_checking = False
+        self.stop_main_key_capture()
 
         if self._update_dialog is not None:
             with contextlib.suppress(Exception):
@@ -3459,6 +3635,7 @@ class KeyForgeApp(ctk.CTk):
             self.recorder.stop()
         if self.executor.is_running:
             self.executor.panic_abort()
+        cancel_all_tcl_after_timers(self)
         with contextlib.suppress(Exception):
             self.destroy()
         with contextlib.suppress(Exception):

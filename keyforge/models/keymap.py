@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import contextlib
+import sys
 from dataclasses import dataclass
 
 
@@ -228,6 +230,136 @@ def get_key_name_from_vk(vk_code: int) -> str | None:
     return info.canonical_name if info else None
 
 
+_TK_KEYSYM_TO_CANONICAL: dict[str, str] = {
+    "control_l": "Ctrl",
+    "control_r": "RCtrl",
+    "shift_l": "Shift",
+    "shift_r": "RShift",
+    "alt_l": "Alt",
+    "alt_r": "RAlt",
+    "iso_level3_shift": "RAlt",
+    "super_l": "Win",
+    "super_r": "RWin",
+    "meta_l": "Win",
+    "meta_r": "RWin",
+    "win_l": "Win",
+    "win_r": "RWin",
+    "return": "Enter",
+    "kp_enter": "Enter",
+    "escape": "Esc",
+    "space": "Space",
+    "backspace": "Backspace",
+    "tab": "Tab",
+    "iso_left_tab": "Tab",
+    "caps_lock": "CapsLock",
+    "num_lock": "NumLock",
+    "scroll_lock": "ScrollLock",
+    "pause": "Pause",
+    "break": "Pause",
+    "print": "PrintScreen",
+    "sys_req": "PrintScreen",
+    "prior": "PageUp",
+    "next": "PageDown",
+    "page_up": "PageUp",
+    "page_down": "PageDown",
+    "home": "Home",
+    "end": "End",
+    "insert": "Insert",
+    "delete": "Delete",
+    "up": "Up",
+    "down": "Down",
+    "left": "Left",
+    "right": "Right",
+    "kp_0": "Numpad0",
+    "kp_1": "Numpad1",
+    "kp_2": "Numpad2",
+    "kp_3": "Numpad3",
+    "kp_4": "Numpad4",
+    "kp_5": "Numpad5",
+    "kp_6": "Numpad6",
+    "kp_7": "Numpad7",
+    "kp_8": "Numpad8",
+    "kp_9": "Numpad9",
+    "kp_multiply": "NumpadMultiply",
+    "kp_add": "NumpadAdd",
+    "kp_subtract": "NumpadSubtract",
+    "kp_decimal": "NumpadDecimal",
+    "kp_divide": "NumpadDivide",
+    "semicolon": "Semicolon",
+    "colon": "Semicolon",
+    "equal": "Equals",
+    "plus": "Equals",
+    "comma": "Comma",
+    "less": "Comma",
+    "minus": "Minus",
+    "underscore": "Minus",
+    "period": "Period",
+    "greater": "Period",
+    "slash": "Slash",
+    "question": "Slash",
+    "grave": "Grave",
+    "asciitilde": "Grave",
+    "bracketleft": "LeftBracket",
+    "braceleft": "LeftBracket",
+    "backslash": "Backslash",
+    "bar": "Backslash",
+    "bracketright": "RightBracket",
+    "braceright": "RightBracket",
+    "apostrophe": "Quote",
+    "quotedbl": "Quote",
+}
+
+_MODIFIER_CANONICAL_NAMES = frozenset({"Ctrl", "RCtrl", "Shift", "RShift", "Alt", "RAlt", "Win", "RWin"})
+
+
+def tk_keysym_to_canonical(keysym: str, keycode: int = 0) -> str | None:
+    """Convert a Tkinter keysym (and optional Win32 VK keycode) into a canonical KeyForge key name."""
+    if not isinstance(keysym, str):
+        keysym = ""
+    cleaned = keysym.strip()
+    if cleaned:
+        mapped = _TK_KEYSYM_TO_CANONICAL.get(cleaned.lower())
+        if mapped:
+            return mapped
+        with contextlib.suppress(ValueError):
+            return resolve_single_key(cleaned).canonical_name
+
+    if sys.platform == "win32" and isinstance(keycode, int) and keycode > 0:
+        return get_key_name_from_vk(keycode)
+    return None
+
+
+def format_captured_key_combo(keysym: str, state: int = 0, keycode: int = 0) -> str | None:
+    """Build a canonical key or modifier+key combo from a Tkinter KeyPress event.
+
+    Returns ``None`` while only modifier keys are pressed so the caller can wait for
+    a primary trigger key (or commit a standalone modifier on release).
+    """
+    canonical = tk_keysym_to_canonical(keysym, keycode=keycode)
+    if canonical is None:
+        return None
+    if canonical in _MODIFIER_CANONICAL_NAMES:
+        return None
+
+    parts: list[str] = []
+    if state & 0x0004:  # Control
+        parts.append("Ctrl")
+    if state & 0x0001:  # Shift
+        parts.append("Shift")
+    if state & (0x0008 | 0x20000):  # Alt (X11 Mod1 or Win32 Alt)
+        parts.append("Alt")
+    parts.append(canonical)
+    return normalize_key_combo("+".join(parts))
+
+
+def finalize_modifier_only_capture(keysym: str, keycode: int = 0) -> str | None:
+    """Resolve a standalone modifier key press/release into its canonical name."""
+    canonical = tk_keysym_to_canonical(keysym, keycode=keycode)
+    if canonical in _MODIFIER_CANONICAL_NAMES:
+        return canonical
+    return None
+
+
 def list_common_keys() -> list[str]:
     """Return an ordered list of common key names for UI dropdowns."""
     priority = [
@@ -239,7 +371,6 @@ def list_common_keys() -> list[str]:
         "5",
         "Space",
         "Enter",
-        "Click",
         "W",
         "A",
         "S",

@@ -23,12 +23,15 @@ from keyforge.models.dsl import (
     parse_quick_expression,
 )
 from keyforge.models.keymap import (
+    finalize_modifier_only_capture,
+    format_captured_key_combo,
     get_key_name_from_vk,
     is_valid_key_combo,
     list_common_keys,
     normalize_key_combo,
     parse_key_combo,
     resolve_single_key,
+    tk_keysym_to_canonical,
 )
 from keyforge.models.profile import (
     MacroProfile,
@@ -54,6 +57,16 @@ def test_keymap_resolution_and_normalization() -> None:
     assert is_valid_key_combo("InvalidKey999") is False
     assert get_key_name_from_vk(0x45) == "E"
     assert "E" in list_common_keys()
+
+    # Tk keysym -> canonical & interactive key capture formatting
+    assert tk_keysym_to_canonical("Return") == "Enter"
+    assert tk_keysym_to_canonical("space") == "Space"
+    assert tk_keysym_to_canonical("Prior") == "PageUp"
+    assert tk_keysym_to_canonical("Control_L") == "Ctrl"
+    assert format_captured_key_combo("Control_L", state=0) is None
+    assert finalize_modifier_only_capture("Shift_L") == "Shift"
+    assert format_captured_key_combo("e", state=0x0005) == "Ctrl+Shift+E"
+    assert format_captured_key_combo("F8", state=0x20000) == "Alt+F8"
 
 
 def test_keymap_invalid_inputs() -> None:

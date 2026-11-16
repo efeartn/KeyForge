@@ -16,17 +16,17 @@ from PIL import Image
 from keyforge.assets import get_icon_ico_path, get_icon_png_path
 from keyforge.models.action import ActionType
 
-# Apple macOS / Human Interface Guidelines Surface Hierarchy (Space Black & Dark Titanium)
-BG_ROOT = "#0C0E12"
-BG_PANEL = "#15181F"
-BG_ELEVATED = "#1C212B"
-BG_CARD = "#191D26"
-BG_CARD_HOVER = "#222733"
-BG_CARD_ACTIVE = "#162C4E"
-BG_INPUT = "#0E1116"
+# Craft Dark Obsidian / Zinc Surface Hierarchy
+BG_ROOT = "#090A0D"
+BG_PANEL = "#111318"
+BG_ELEVATED = "#171A21"
+BG_CARD = "#14171E"
+BG_CARD_HOVER = "#1B1F29"
+BG_CARD_ACTIVE = "#16263D"
+BG_INPUT = "#0C0E12"
 
-BORDER_SUBTLE = "#262C38"
-BORDER_FOCUS = "#0A84FF"
+BORDER_SUBTLE = "#222631"
+BORDER_FOCUS = "#3B82F6"
 
 # Typography Hierarchy (Crisp High-Legibility)
 TEXT_PRIMARY = "#FFFFFF"
@@ -48,11 +48,13 @@ ACCENT_PURPLE = "#BF5AF2"  # Apple Purple
 ACCENT_PURPLE_HOVER = "#9F37D6"
 ACCENT_CYAN = "#64D2FF"  # Apple Teal/Cyan
 
-# Calm Apple Neutral Surfaces & Status Banners
+# Calm Neutral Surfaces & Subtle Danger Control
 BTN_NEUTRAL = "#232936"
 BTN_NEUTRAL_HOVER = "#2E3646"
-BTN_SUBTLE = "#1E232E"
-BTN_SUBTLE_HOVER = "#2A3140"
+BTN_SUBTLE = "#1B1F29"
+BTN_SUBTLE_HOVER = "#262C3A"
+BTN_DANGER_SUBTLE = "#2B1418"
+BTN_DANGER_SUBTLE_TEXT = "#FF6B6B"
 
 BANNER_UPDATE_BG = "#0F291E"
 BANNER_UPDATE_BORDER = "#1D6B44"
@@ -304,3 +306,16 @@ def center_window_on_parent(
 
     window.geometry(f"{w}x{h}+{x_px}+{y_px}")
     return (w, h)
+
+
+def cancel_all_tcl_after_timers(window: Any) -> None:
+    """Cancel all pending Tcl ``after`` callbacks directly without breaking child ``destroy()``."""
+    with contextlib.suppress(Exception):
+        raw_ids = window.tk.call("after", "info")
+        if isinstance(raw_ids, str):
+            timer_ids = tuple(raw_ids.split())
+        else:
+            timer_ids = tuple(raw_ids)
+        for timer_id in timer_ids:
+            with contextlib.suppress(Exception):
+                window.tk.call("after", "cancel", timer_id)

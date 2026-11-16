@@ -290,13 +290,14 @@ def test_app_config_legacy_migration_and_sanitization() -> None:
     assert AppConfig.from_dict({"ui_mode": "Advanced Mode"}).ui_mode == "studio"
     assert AppConfig.from_dict({"ui_mode": 42}).ui_mode == "simple"
 
-    # Legacy & current simple task labels
-    assert AppConfig.from_dict({"simple_task": "Clicker"}).simple_task == "clicker"
-    assert AppConfig.from_dict({"simple_task": "Auto-Clicker"}).simple_task == "clicker"
+    # Legacy & current simple task labels (legacy 'clicker' migrates to 'spammer')
+    assert AppConfig.from_dict({"simple_task": "Clicker"}).simple_task == "spammer"
+    assert AppConfig.from_dict({"simple_task": "Auto-Clicker"}).simple_task == "spammer"
+    assert AppConfig.from_dict({"simple_task": "Key Repeater"}).simple_task == "spammer"
     assert AppConfig.from_dict({"simple_task": "Key Spammer"}).simple_task == "spammer"
     assert AppConfig.from_dict({"simple_task": "Combo"}).simple_task == "sequence"
     assert AppConfig.from_dict({"simple_task": "Quick Sequence"}).simple_task == "sequence"
-    assert AppConfig.from_dict({"simple_task": None}).simple_task == "clicker"
+    assert AppConfig.from_dict({"simple_task": None}).simple_task == "spammer"
 
     # Field sanitization & bounds clamping
     sanitized = AppConfig.from_dict(

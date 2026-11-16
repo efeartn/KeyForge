@@ -6,6 +6,7 @@ import contextlib
 import subprocess
 import sys
 from pathlib import Path
+from tkinter import filedialog
 
 import customtkinter as ctk
 
@@ -34,6 +35,7 @@ from keyforge.ui.theme import (
     TEXT_PRIMARY,
     TEXT_SECONDARY,
     apply_window_icon,
+    cancel_all_tcl_after_timers,
     center_window_on_parent,
     get_fonts,
     load_brand_ctk_image,
@@ -135,13 +137,26 @@ class InstallerWindow(ctk.CTk):
 
         dir_box = ctk.CTkFrame(loc_card, fg_color=BG_INPUT, corner_radius=8)
         dir_box.pack(fill="x", padx=14, pady=(0, 12))
-        ctk.CTkLabel(
+        if self._mode == "setup":
+            self.browse_btn = ctk.CTkButton(
+                dir_box,
+                text="Browse...",
+                width=82,
+                height=26,
+                fg_color=BTN_NEUTRAL,
+                hover_color=BTN_NEUTRAL_HOVER,
+                font=self.fonts["small_bold"],
+                command=self._browse_install_dir,
+            )
+            self.browse_btn.pack(side="right", padx=(6, 8), pady=5)
+        self.dir_lbl = ctk.CTkLabel(
             dir_box,
             text=str(self._target_dir),
             font=self.fonts["mono_small"],
             text_color=TEXT_PRIMARY,
             anchor="w",
-        ).pack(fill="x", padx=10, pady=8)
+        )
+        self.dir_lbl.pack(side="left", fill="x", expand=True, padx=10, pady=8)
 
         # Options Card
         opts_card = ctk.CTkFrame(
@@ -278,6 +293,23 @@ class InstallerWindow(ctk.CTk):
             self.status_lbl.configure(text=f"Operation failed: {exc}", text_color=ACCENT_DANGER)
             self.action_btn.configure(state="normal")
 
+    def set_target_dir(self, path: str | Path) -> None:
+        """Update the destination installation folder shown in the wizard."""
+        cleaned = str(path).strip()
+        if not cleaned:
+            return
+        self._target_dir = Path(cleaned)
+        if hasattr(self, "dir_lbl"):
+            self.dir_lbl.configure(text=str(self._target_dir))
+
+    def _browse_install_dir(self) -> None:
+        chosen = filedialog.askdirectory(
+            initialdir=str(self._target_dir),
+            title="Select Installation Folder",
+        )
+        if chosen:
+            self.set_target_dir(chosen)
+
     def _on_close(self) -> None:
         if self._closing:
             return
@@ -287,5 +319,9 @@ class InstallerWindow(ctk.CTk):
             with contextlib.suppress(Exception):
                 self.after_cancel(aid)
             self._kf_icon_after_id = None
+        cancel_all_tcl_after_timers(self)
         with contextlib.suppress(Exception):
             self.destroy()
+        with contextlib.suppress(Exception):
+            if not ctk.ScalingTracker.window_widgets_dict:
+                ctk.ScalingTracker.update_loop_running = False

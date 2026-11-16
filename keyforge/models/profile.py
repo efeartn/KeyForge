@@ -14,7 +14,9 @@ from keyforge.models.action import (
     MouseButton,
     MoveMode,
     _require_int,
+    make_key_down,
     make_key_press,
+    make_key_up,
     make_mouse_click,
     make_mouse_move,
     make_repeat_block,
@@ -183,20 +185,9 @@ def create_default_profile() -> MacroProfile:
 
 
 def get_builtin_presets() -> dict[str, MacroProfile]:
-    """Return built-in ready-to-run macro presets."""
+    """Return built-in ready-to-run keyboard & sequence macro presets."""
     presets = [
         create_default_profile(),
-        MacroProfile(
-            name="Simple Auto-Clicker (10 CPS)",
-            description="Left Click every 100ms (10 CPS) with ±10ms natural timing jitter.",
-            repeat_mode=RepeatMode.INFINITE,
-            repeat_count=100,
-            inter_cycle_delay_ms=0,
-            actions=[
-                make_mouse_click(MouseButton.LEFT, ClickType.SINGLE, hold_ms=15, label="Left Click"),
-                make_wait(85, jitter_ms=10, label="10 CPS Interval"),
-            ],
-        ),
         MacroProfile(
             name="Key Spammer (Press E Loop)",
             description="Repeatedly taps [E] every 100ms with ±10ms natural timing jitter.",
@@ -209,14 +200,17 @@ def get_builtin_presets() -> dict[str, MacroProfile]:
             ],
         ),
         MacroProfile(
-            name="Humanized Auto-Clicker (20 CPS)",
-            description="Rapid Left Click every 50ms with ±12ms natural timing jitter.",
-            repeat_mode=RepeatMode.INFINITE,
-            repeat_count=100,
-            inter_cycle_delay_ms=0,
+            name="Tactical Sprint & Reload Combo",
+            description="Holds Shift briefly, releases, then presses R with clean cadence.",
+            repeat_mode=RepeatMode.COUNT,
+            repeat_count=5,
+            inter_cycle_delay_ms=150,
             actions=[
-                make_mouse_click(MouseButton.LEFT, ClickType.SINGLE, hold_ms=15, label="Fast Click"),
-                make_wait(35, jitter_ms=12, label="Humanized Interval"),
+                make_key_down("Shift", label="Hold Sprint"),
+                make_wait(150, jitter_ms=10, label="Sprint Window"),
+                make_key_up("Shift", label="Release Sprint"),
+                make_key_press("R", hold_ms=30, label="Reload"),
+                make_wait(250, jitter_ms=15, label="Recovery Pause"),
             ],
         ),
         MacroProfile(

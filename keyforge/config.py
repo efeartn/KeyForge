@@ -30,7 +30,7 @@ MAX_CONFIG_FILE_BYTES = 1_048_576  # 1 MiB safety limit
 _PRESET_FILENAME_SANITIZER = re.compile(r"[^A-Za-z0-9_ -]+")
 
 VALID_UI_MODES = ("simple", "studio")
-VALID_SIMPLE_TASKS = ("clicker", "spammer", "sequence")
+VALID_SIMPLE_TASKS = ("spammer", "sequence")
 
 
 def _default_simple_clicker() -> dict[str, Any]:
@@ -74,17 +74,15 @@ def _normalize_ui_mode(value: Any) -> str:
 
 
 def _normalize_simple_task(value: Any) -> str:
-    """Normalize Simple Mode task selection, gracefully migrating legacy labels."""
+    """Normalize Simple Mode task selection, migrating legacy 'clicker' configs to 'spammer'."""
     if not isinstance(value, str):
-        return "clicker"
-    lowered = value.strip().lower()
-    if "spam" in lowered:
         return "spammer"
+    lowered = value.strip().lower()
     if "seq" in lowered or "combo" in lowered:
         return "sequence"
-    if "click" in lowered:
-        return "clicker"
-    return "clicker"
+    if "spam" in lowered or "repeat" in lowered or "key" in lowered or "click" in lowered:
+        return "spammer"
+    return "spammer"
 
 
 def _normalize_hotkey(value: Any, default: str) -> str:
@@ -179,7 +177,7 @@ class AppConfig:
 
     schema_version: int = 1
     ui_mode: str = "simple"
-    simple_task: str = "clicker"
+    simple_task: str = "spammer"
     window_geometry: str | None = None
     start_stop_hotkey: str = "F6"
     record_hotkey: str = "F7"
@@ -238,7 +236,7 @@ class AppConfig:
         return cls(
             schema_version=data.get("schema_version", 1),
             ui_mode=data.get("ui_mode", "simple"),
-            simple_task=data.get("simple_task", "clicker"),
+            simple_task=data.get("simple_task", "spammer"),
             window_geometry=data.get("window_geometry"),
             start_stop_hotkey=data.get("start_stop_hotkey", "F6"),
             record_hotkey=data.get("record_hotkey", "F7"),

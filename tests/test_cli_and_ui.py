@@ -20,9 +20,6 @@ from keyforge.assets import get_icon_ico_path, get_icon_png_path
 from keyforge.main import main
 from keyforge.models.action import (
     ActionType,
-    ClickType,
-    MouseButton,
-    make_mouse_click,
     make_wait,
 )
 from keyforge.models.profile import RepeatMode
@@ -215,7 +212,7 @@ def test_version_parity_and_cli_version_flag() -> None:
     pyproject_data = tomllib.loads(pyproject_path.read_text(encoding="utf-8"))
     project_version = pyproject_data["project"]["version"]
 
-    assert __version__ == "1.3.0"
+    assert __version__ == "1.4.0"
     assert __version__ == project_version
     assert USER_AGENT == f"KeyForge/{__version__}"
 
@@ -241,9 +238,9 @@ def test_simple_and_studio_bidirectional_profile_sync(
         app.update_idletasks()
         assert app.ui_mode_var.get() == "Simple"
 
-        # 1. Configure Key Spammer + Count repeat in Simple Mode -> switch to Studio Mode
-        app.simple_task_var.set("Key Spammer")
-        app._on_simple_task_changed("Key Spammer")
+        # 1. Configure Key Repeater + Count repeat in Simple Mode -> switch to Studio Mode
+        app.simple_task_var.set("Key Repeater")
+        app._on_simple_task_changed("Key Repeater")
         assert app.ss_panel.winfo_manager() != ""
 
         app.ss_key_combo.set("F")
@@ -271,7 +268,7 @@ def test_simple_and_studio_bidirectional_profile_sync(
         app.dsl_entry.delete(0, "end")
         app.dsl_entry.insert(0, "Press E -> Wait 150ms -> Click -> Press 1")
         assert app.apply_quick_expression(append=False) is True
-        app.repeat_mode_var.set(RepeatMode.DURATION.value)
+        app.repeat_mode_var.set("Duration")
         app.repeat_val_entry.delete(0, "end")
         app.repeat_val_entry.insert(0, "12")
         assert app.sync_ui_settings_to_profile() is True
@@ -284,22 +281,16 @@ def test_simple_and_studio_bidirectional_profile_sync(
         assert app.simple_repeat_mode_var.get() == "Duration"
         assert float(app.simple_repeat_val_entry.get().strip()) == 12.0
 
-        # 3. Author a 2-step clicker pattern in Studio -> switch to Simple (infers Auto-Clicker + Fixed XY)
+        # 3. Author a 2-step key repeat pattern in Studio -> switch to Simple (infers Key Repeater)
         app._switch_ui_mode("Studio")
-        app.profile.actions = [
-            make_mouse_click(MouseButton.RIGHT, ClickType.DOUBLE, x=320, y=240, hold_ms=15),
-            make_wait(185, jitter_ms=10),
-        ]
-        app._on_sequence_mutated(sync_simple=False)
+        app.dsl_entry.delete(0, "end")
+        app.dsl_entry.insert(0, "Press G -> Wait 180ms ±10ms")
+        assert app.apply_quick_expression(append=False) is True
         app._switch_ui_mode("Simple")
-        assert app.sc_panel.winfo_manager() != ""
-        assert app.sc_button_var.get() == "Right"
-        assert app.sc_click_type_var.get() == "Double"
-        assert app.sc_loc_mode_var.get() == "Fixed XY"
-        assert app.sc_x_entry.get().strip() == "320"
-        assert app.sc_y_entry.get().strip() == "240"
-        assert app.sc_jitter_var.get() is True
-        assert int(round(app.sc_interval_slider.get())) == 200
+        assert app.ss_panel.winfo_manager() != ""
+        assert app.ss_key_combo.get().strip() == "G"
+        assert app.ss_jitter_var.get() is True
+        assert int(round(app.ss_interval_slider.get())) == 205
     finally:
         app._on_close()
 
@@ -313,29 +304,30 @@ def test_debounced_filter_and_simple_slider_timers(
 
     app = KeyForgeApp(start_hotkey_listener=False)
     try:
-        # 1. Rapid Simple Auto-Clicker slider moves cancel previous timer and flush cleanly
+        # 1. Rapid Simple Key Repeater slider moves cancel previous timer and flush cleanly
         with patch.object(app, "after_cancel", wraps=app.after_cancel) as spy_cancel:
-            app.sc_interval_slider.set(120)
-            app._on_sc_slider_moved(120)
+            app.ss_key_combo.set("E")
+            app.ss_interval_slider.set(120)
+            app._on_ss_slider_moved(120)
             first_id = app._simple_slider_after_id
             assert first_id is not None
 
-            app.sc_interval_slider.set(160)
-            app._on_sc_slider_moved(160)
-            app.sc_interval_slider.set(250)
-            app._on_sc_slider_moved(250)
+            app.ss_interval_slider.set(160)
+            app._on_ss_slider_moved(160)
+            app.ss_interval_slider.set(250)
+            app._on_ss_slider_moved(250)
 
             assert spy_cancel.call_count == 2
             assert app._simple_slider_after_id is not None
-            assert app.sc_interval_lbl.cget("text") == "250 ms (4.0 CPS)"
+            assert app.ss_interval_lbl.cget("text") == "250 ms (4.0 / sec)"
 
-        # Flush clicker timer manually & verify timer ID cleared + profile updated
-        app._commit_simple_slider_change("clicker")
+        # Flush repeater timer manually & verify timer ID cleared + profile updated
+        app._commit_simple_slider_change("spammer")
         assert app._simple_slider_after_id is None
-        assert app.profile.actions[0].action_type == ActionType.MOUSE_CLICK
+        assert app.profile.actions[0].action_type == ActionType.KEY_PRESS
         assert app.profile.actions[0].hold_ms + app.profile.actions[1].wait_ms == 250
 
-        # 2. Rapid Key Spammer slider moves execute real debounced after(80, ...) callback once
+        # 2. Rapid Key Repeater slider moves execute real debounced after(80, ...) callback once
         with patch.object(app, "after_cancel", wraps=app.after_cancel) as spy_cancel:
             app.ss_key_combo.set("Q")
             app.ss_interval_slider.set(95)
@@ -369,7 +361,7 @@ def test_debounced_filter_and_simple_slider_timers(
         assert len(app._step_row_frames) == 1
 
         # 4. Pending timers are cancelled on close & debounced callbacks no-op safely when closing
-        app._on_sc_slider_moved(300)
+        app._on_ss_slider_moved(300)
         app._on_filter_changed(event=object())
         assert app._simple_slider_after_id is not None
         assert app._filter_after_id is not None
@@ -377,7 +369,7 @@ def test_debounced_filter_and_simple_slider_timers(
         app._on_close()
         assert app._simple_slider_after_id is None
         assert app._filter_after_id is None
-        app._commit_simple_slider_change("clicker")
+        app._commit_simple_slider_change("spammer")
         app._apply_filter_debounced()
     finally:
         if not app._closing:
@@ -423,7 +415,7 @@ def test_dirty_checked_ui_tick_avoids_redundant_widget_configures(
             app.dry_run_var.set(True)
             app._ui_tick()
             assert spy_mode.call_count == 1
-            assert "Dry-Run Simulation" in app.mode_sub_lbl.cget("text")
+            assert app.mode_sub_lbl.cget("text") == "Dry-Run"
             assert spy_status.call_count == 0
             assert spy_cycles.call_count == 0
             assert spy_run_btn.call_count == 0

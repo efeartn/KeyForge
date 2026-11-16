@@ -28,17 +28,19 @@ from keyforge.updater import ReleaseInfo
 
 def test_beginner_presets_present_and_valid() -> None:
     presets = get_builtin_presets()
-    assert "Simple Auto-Clicker (10 CPS)" in presets
+    assert "Simple Auto-Clicker (10 CPS)" not in presets
+    assert "Humanized Auto-Clicker (20 CPS)" not in presets
     assert "Key Spammer (Press E Loop)" in presets
-
-    clicker = presets["Simple Auto-Clicker (10 CPS)"]
-    assert clicker.total_cycle_wait_ms() == 100
-    assert clicker.actions[0].action_type == ActionType.MOUSE_CLICK
+    assert "Tactical Sprint & Reload Combo" in presets
 
     spammer = presets["Key Spammer (Press E Loop)"]
     assert spammer.total_cycle_wait_ms() == 100
     assert spammer.actions[0].action_type == ActionType.KEY_PRESS
     assert spammer.actions[0].key == "E"
+
+    tactical = presets["Tactical Sprint & Reload Combo"]
+    assert tactical.actions[0].action_type == ActionType.KEY_DOWN
+    assert tactical.actions[0].key == "Shift"
 
 
 def test_step_dialog_click_hold_ms_and_repeat_disabled_substep_preservation() -> None:
@@ -81,11 +83,11 @@ def test_simple_studio_sync_caching_and_persistence(tmp_path: Path, monkeypatch:
         # Cached fonts shared between app and dialog
         assert get_fonts(app) is app.fonts
 
-        # Switch to Simple Auto-Clicker and configure 100ms
-        app.simple_task_var.set("Auto-Clicker")
-        app._on_simple_task_changed("Auto-Clicker")
+        # Switch to Simple Key Repeater and apply E loop
+        app.simple_task_var.set("Key Repeater")
+        app._on_simple_task_changed("Key Repeater")
         assert len(app.profile.actions) == 2
-        assert app.profile.actions[0].action_type == ActionType.MOUSE_CLICK
+        assert app.profile.actions[0].action_type == ActionType.KEY_PRESS
 
         # Empty profile execution guard shows toast cleanly without starting
         app.clear_all_steps()
@@ -262,7 +264,7 @@ def test_custom_presets_countdown_mini_hud_and_installer_ui(
         if not app._closing:
             app._on_close()
 
-    # 5. Setup & Uninstall GUI window smoke check
+    # 5. Setup & Uninstall GUI window smoke check + Browse target_dir setter
     monkeypatch.setattr("keyforge.installer._create_windows_shortcut", lambda *args, **kwargs: True)
     monkeypatch.setattr("keyforge.installer._register_windows_uninstaller", lambda *args, **kwargs: True)
     setup_win = InstallerWindow(mode="setup", install_dir=tmp_path / "wiz_install")
@@ -270,4 +272,81 @@ def test_custom_presets_countdown_mini_hud_and_installer_ui(
         setup_win.update_idletasks()
         assert "Setup" in setup_win.title()
         assert setup_win.purge_var.get() is False
+        custom_dir = tmp_path / "custom_install_path"
+        setup_win.set_target_dir(custom_dir)
+        assert setup_win._target_dir == custom_dir
+        assert str(custom_dir) in setup_win.dir_lbl.cget("text")
     setup_win._on_close()
+
+
+def test_v14_craft_ui_key_capture_step_shortcuts_and_studio_repeat_visibility(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from keyforge.ui.step_dialog import _ACTION_TYPE_LABELS
+
+    monkeypatch.setenv("KEYFORGE_CONFIG_DIR", str(tmp_path))
+    app = KeyForgeApp(start_hotkey_listener=False)
+    try:
+        # 1. StepEditorDialog human labels + Click-to-Bind key capture
+        saved_steps: list = []
+        dlg = StepEditorDialog(app, initial_action=make_key_press("E"), on_save=saved_steps.append)
+        assert dlg.type_var.get() == _ACTION_TYPE_LABELS[ActionType.KEY_PRESS]
+        dlg.start_key_capture()
+        assert dlg._capturing_key is True
+        dlg.apply_captured_key("Ctrl+Shift+F")
+        assert dlg._capturing_key is False
+        assert dlg.key_combo.get() == "Ctrl+Shift+F"
+        dlg._on_submit()
+        assert len(saved_steps) == 1
+        assert saved_steps[0].key == "Ctrl+Shift+F"
+
+        # 2. Simple Mode Key Repeater Click-to-Bind + quick speed preset chips
+        app.simple_task_var.set("Key Repeater")
+        app._on_simple_task_changed("Key Repeater")
+        app.start_main_key_capture("simple_spammer")
+        assert app._key_capture_target == "simple_spammer"
+        app.apply_main_captured_key("simple_spammer", "Ctrl+R")
+        assert app._key_capture_target is None
+        assert app.ss_key_combo.get() == "Ctrl+R"
+        app._set_simple_spammer_interval(250)
+        assert app.profile.actions[0].key == "Ctrl+R"
+        assert app.profile.total_cycle_wait_ms() == 250
+
+        # 3. Studio Mode dynamic Repeat Value visibility + Click-to-Bind hotkey rebinding
+        app._switch_ui_mode("Studio")
+        app._on_repeat_settings_changed("Infinite")
+        assert app._studio_repeat_val_row.winfo_manager() == ""
+        app._on_repeat_settings_changed("Fixed Count")
+        assert app._studio_repeat_val_row.winfo_manager() != ""
+        assert "Count" in app._studio_repeat_val_lbl.cget("text")
+        app._on_repeat_settings_changed("Duration")
+        assert "Duration" in app._studio_repeat_val_lbl.cget("text")
+
+        app.start_main_key_capture("hk_start")
+        app.apply_main_captured_key("hk_start", "F8")
+        assert app.profile.start_stop_hotkey == "F8"
+
+        # 4. Studio Mode Step Selection & Desktop Keyboard Workflow
+        app._apply_template_chip("Press E -> Wait 200ms -> Click -> Press 1")
+        assert len(app.profile.actions) == 4
+        assert app.select_step(0) == 0
+        assert app.toggle_selected_step_enabled() is True
+        assert app.profile.actions[0].enabled is False
+        assert app.toggle_selected_step_enabled() is True
+        assert app.profile.actions[0].enabled is True
+
+        assert app.duplicate_selected_step() is True
+        assert len(app.profile.actions) == 5
+        assert app._selected_step_index == 1
+
+        assert app.move_selected_step_down() is True
+        assert app._selected_step_index == 2
+        assert app.move_selected_step_up() is True
+        assert app._selected_step_index == 1
+
+        assert app.delete_selected_step() is True
+        assert len(app.profile.actions) == 4
+    finally:
+        if not app._closing:
+            app._on_close()

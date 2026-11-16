@@ -4,7 +4,7 @@
 
 # KeyForge
 
-**Minimalist Dark Titanium Keyboard & Mouse Macro Studio, Auto-Clicker & Input Recorder.**  
+**Precision Obsidian & Zinc Keyboard & Macro Sequence Studio & Live Input Recorder.**  
 Free, Open-Source (`GPL-3.0`), Cybersecurity-Hardened, and Native for Windows, macOS & Linux — with Zero Browser Bloat.
 
 [![CI & Release Compiler](https://github.com/efeartn/KeyForge/actions/workflows/ci.yml/badge.svg)](https://github.com/efeartn/KeyForge/actions/workflows/ci.yml)
@@ -14,7 +14,7 @@ Free, Open-Source (`GPL-3.0`), Cybersecurity-Hardened, and Native for Windows, m
 [![Security: SHA-256 Signed + Static Auditor](https://img.shields.io/badge/Security-SHA--256%20Verified%20%2B%20Static%20Auditor-10B981)](SECURITY.md)
 [![License: GPL-3.0](https://img.shields.io/badge/License-GPL--3.0-8B5CF6.svg)](LICENSE)
 
-[**Download v1.3.0**](#download-standalone-executables) • [**Visual Tour**](#visual-tour) • [**Setup Installer & Updater**](#windows-setup-installer--auto-updater) • [**Quick-Forge DSL**](#quick-forge-recipe-dsl-reference) • [**Cybersecurity**](#cybersecurity--safety-engineering) • [**CLI & Source**](#installation--quick-start)
+[**Download v1.4.0**](#download-standalone-executables) • [**Visual Tour**](#visual-tour) • [**Setup Installer & Updater**](#windows-setup-installer--auto-updater) • [**Sequence DSL**](#sequence-dsl-reference) • [**Cybersecurity**](#cybersecurity--safety-engineering) • [**CLI & Source**](#installation--quick-start)
 
 </div>
 
@@ -23,9 +23,9 @@ Free, Open-Source (`GPL-3.0`), Cybersecurity-Hardened, and Native for Windows, m
 ## Studio Workspace at a Glance
 
 <div align="center">
-  <img src="docs/screenshots/studio_mode.png" alt="KeyForge Studio Mode Dark Titanium Desktop Interface" width="100%" />
+  <img src="docs/screenshots/studio_mode.png" alt="KeyForge Studio Mode Obsidian Dark Desktop Interface" width="100%" />
   <br />
-  <sub><b>Studio Mode (v1.3.0)</b> — Custom saved presets library (<code>+ Preset</code>), pre-start countdown selector (<code>0s–5s</code>), always-on-top <b>Mini HUD</b> toggle, live Quick-Forge DSL bar, color-coded visual timeline cards, and hardware Panic Stop (<code>F12</code>).</sub>
+  <sub><b>Studio Mode (v1.4.0)</b> — Single-line transport &amp; telemetry strip, interactive click-to-bind hotkeys, keyboard-navigable sequence cards (<code>Del</code> / <code>Ctrl+D</code> / <code>Space</code> / <code>Alt+↑/↓</code>), custom saved presets (<code>+ Preset</code>), pre-start countdown (<code>0s–5s</code>), and compact <b>Mini HUD</b>.</sub>
 </div>
 
 ---
@@ -34,20 +34,20 @@ Free, Open-Source (`GPL-3.0`), Cybersecurity-Hardened, and Native for Windows, m
 
 ### Dual Workspaces: `Simple` & `Studio`
 
-KeyForge adapts smoothly from beginner one-click automation to full multi-step macro engineering without forcing complex timelines onto everyday users.
+KeyForge adapts smoothly from quick keyboard automation to full multi-step sequence engineering without forcing complex timelines onto everyday workflows.
 
 <table>
   <tr>
     <td width="58%" valign="top">
-      <img src="docs/screenshots/simple_mode.png" alt="KeyForge Simple Mode Auto-Clicker and Control Center" width="100%" />
+      <img src="docs/screenshots/simple_mode.png" alt="KeyForge Simple Mode Key Repeater and Control Center" width="100%" />
     </td>
     <td width="42%" valign="top">
-      <h3>Everyday Automation in One Screen</h3>
+      <h3>Everyday Keyboard Automation</h3>
       <ul>
-        <li><b>Two Live Modes:</b> Toggle between <b>Simple</b> (Auto-Clicker, Key Spammer, Quick Sequence) and <b>Studio</b> (full visual timeline) with live bidirectional profile syncing.</li>
-        <li><b>Pre-Start Countdown Timer:</b> Choose a <code>0s</code>, <code>1s</code>, <code>3s</code>, or <code>5s</code> Start Delay so you have time to focus your target game or app window before inputs begin.</li>
-        <li><b>Custom Presets Library:</b> Save your favorite Simple or Studio setups with <code>+ Preset</code> into the top preset selector across restarts.</li>
-        <li><b>Built for Older &amp; Low-RAM PCs:</b> Native <code>CustomTkinter</code> + <code>Pillow</code> UI with zero Chromium/WebView runtime overhead and responsive <code>1280×720</code> High-DPI sizing.</li>
+        <li><b>Two Live Modes:</b> Toggle between <b>Simple</b> (Key Repeater &amp; Quick Sequence) and <b>Studio</b> (full visual timeline) with live bidirectional profile syncing.</li>
+        <li><b>Click-to-Bind Key Capture &amp; Presets:</b> Click <b>Bind Key</b> to capture any physical key or modifier combo (e.g. <code>Ctrl+Shift+F</code>) and pick speed presets (<code>25ms–500ms</code>) or save custom profiles with <code>+ Preset</code>.</li>
+        <li><b>Pre-Start Countdown &amp; Shortcuts:</b> Set a <code>0s–5s</code> Start Delay in Simple or Studio mode, and manage timeline steps quickly with <code>Del</code>, <code>Ctrl+D</code>, <code>Space</code>, and <code>Alt+↑/↓</code>.</li>
+        <li><b>Built for Older &amp; Low-RAM PCs:</b> Native <code>CustomTkinter</code> + <code>Pillow</code> UI with zero Chromium/WebView runtime overhead and responsive High-DPI sizing.</li>
       </ul>
     </td>
   </tr>
@@ -67,10 +67,10 @@ KeyForge adapts smoothly from beginner one-click automation to full multi-step m
       </p>
     </td>
     <td width="50%" valign="top" align="center">
-      <img src="docs/screenshots/setup_installer.png" alt="KeyForge v1.3.0 Setup Installer Wizard" width="90%" />
+      <img src="docs/screenshots/setup_installer.png" alt="KeyForge v1.4.0 Setup Installer Wizard with Browse Button" width="90%" />
       <p align="left">
         <b>Windows Setup Installer &amp; Uninstaller</b><br />
-        Run <code>KeyForge-Setup-Windows-x64.exe</code> to install per-user without admin UAC prompts, create Desktop &amp; Start Menu shortcuts, register Windows Uninstall cleanly, and keep configs &amp; saved macros safe on uninstall unless opted out.
+        Run <code>KeyForge-Setup-Windows-x64.exe</code> to choose a destination with <b>Browse...</b>, install per-user without admin UAC prompts, create Desktop &amp; Start Menu shortcuts, and preserve user configs &amp; macros on uninstall unless opted out.
       </p>
     </td>
   </tr>
@@ -81,10 +81,10 @@ KeyForge adapts smoothly from beginner one-click automation to full multi-step m
 <table>
   <tr>
     <td width="50%" valign="top" align="center">
-      <img src="docs/screenshots/step_inspector.png" alt="KeyForge Modal Action Step Editor with Pick XY" width="92%" />
+      <img src="docs/screenshots/step_inspector.png" alt="KeyForge Modal Action Step Editor with Bind Key Capture" width="92%" />
       <p align="left">
         <b>Precision Step Inspector</b><br />
-        Double-click any step (or click <code>Edit</code>) to configure key holds, click modes, relative pixel deltas, nested <code>Repeat</code> loops, or capture live cursor coordinates with <b>Pick XY</b>.
+        Double-click any step (or click <code>Edit</code>) to configure readable action modes, capture keys directly with <b>Bind Key</b>, build nested <code>Repeat</code> loops, or capture live screen coordinates with <b>Pick XY</b>.
       </p>
     </td>
     <td width="50%" valign="top" align="center">
@@ -148,7 +148,7 @@ sha256sum -c KeyForge-Linux-x64.sha256.txt && chmod +x KeyForge-Linux-x64
 
 ### Auto-Updater & Persistent Configuration
 
-When you upgrade KeyForge from inside the app or launch a newer standalone binary, your hotkeys, UI mode, Auto-Clicker / Key Spammer sliders, start delay, custom presets, window geometry, and active macro profile stay completely intact.
+When you upgrade KeyForge from inside the app or launch a newer standalone binary, your hotkeys, UI mode, Key Repeater interval, start delay, custom presets, window geometry, and active macro profile stay completely intact.
 
 - **Startup Release Check**: Background check on startup notifies you cleanly via a dismissible header banner and the **Updates** pill when a newer release exists on GitHub (can be toggled anytime with **Check for updates on startup**).
 - **Strict Transport & Hash Verification**: Enforces `HTTPS`-only GitHub redirects, matches portable binaries cleanly without confusing them for installers, streams downloads atomically with progress reporting, and rejects any download whose `SHA-256` fails constant-time comparison against `SHA256SUMS.txt` / `.sha256.txt`.
@@ -169,8 +169,8 @@ Many desktop macro tools force a trade-off between usability, transparency, and 
 | Feature / Guarantee | **KeyForge (`GPL-3.0`)** | **TinyTask** | **AutoHotkey** | **Paid Macro Tools** |
 | :--- | :---: | :---: | :---: | :---: |
 | **100% Free & Open Source** | ✅ Yes | ❌ Closed binary | ✅ Yes | ❌ Paywalls / Trials |
-| **Beginner Auto-Clicker + Visual Studio** | ✅ Dual UI Modes | ❌ Record-only blob | ❌ Scripts only | ⚠️ Often split tiers |
-| **One-Line Quick-Forge Recipe Bar** | ✅ `Press E -> Wait 200ms -> Click` | ❌ No | ❌ Manual script | ❌ No |
+| **Simple Key Repeater + Visual Studio** | ✅ Dual UI Modes | ❌ Record-only blob | ❌ Scripts only | ⚠️ Often split tiers |
+| **One-Line Sequence DSL Bar** | ✅ `Press E -> Wait 200ms -> Click` | ❌ No | ❌ Manual script | ❌ No |
 | **Humanized Random Jitter (`±ms`)** | ✅ Built into Wait steps | ❌ Fixed delays | ⚠️ Manual `Random()` | ❌ Rare |
 | **Auto-Release Stuck Keys on Abort** | ✅ `EmergencyInputSanitizer` | ❌ Leaves Shift/Ctrl stuck | ❌ Manual cleanup | ⚠️ Unreliable |
 | **SHA-256 Signed Profiles + Static Auditor** | ✅ Yes (`KF-SEC-001..005`) | ❌ Unverified binary blobs | ❌ Arbitrary execution | ❌ Closed format |
@@ -179,11 +179,11 @@ Many desktop macro tools force a trade-off between usability, transparency, and 
 
 ---
 
-## Quick-Forge Recipe DSL Reference
+## Sequence DSL Reference
 
-Type or paste human-readable macro recipes directly into the **Quick-Forge** bar and press `Enter` (or click **Replace** / **+ Append**):
+Type or paste human-readable macro recipes directly into the **Sequence DSL** bar and press `Enter` (or click **Replace** / **+ Append**):
 
-| Action | Quick-Forge Syntax Examples | Description |
+| Action | Sequence DSL Syntax Examples | Description |
 | :--- | :--- | :--- |
 | **Key Tap** | `Press E` • `Press Space` • `Press 1 (hold 40ms)` | Presses and releases a key with configurable hold time |
 | **Modifier Combo** | `Press Ctrl+Shift+E` • `Press Alt+F` | Holds modifiers in order, taps primary key, releases in reverse |
@@ -250,19 +250,19 @@ KeyForge/
 │   │   └── win32_input.py        # 64-bit Win32 SendInput + Cross-Platform Fallback
 │   ├── models/
 │   │   ├── action.py             # MacroAction Dataclass, ActionType & Validation
-│   │   ├── dsl.py                # Quick-Forge Recipe Parser & Formatter
-│   │   ├── keymap.py             # Virtual-Key (VK) & Hardware Scan-Code Registry
+│   │   ├── dsl.py                # Sequence DSL Parser & Formatter
+│   │   ├── keymap.py             # Virtual-Key (VK), Scan-Code & Key Capture Registry
 │   │   └── profile.py            # MacroProfile & Built-In Presets
 │   ├── security/
 │   │   ├── auditor.py            # Static Security & Safety Analyzer (KF-SEC-001..005)
 │   │   ├── integrity.py          # Canonical SHA-256 Signing & Constant-Time Verification
 │   │   └── validator.py          # Allowlist Schema, Path & Complexity Budget Validator
 │   ├── ui/
-│   │   ├── app.py                # Dual Simple/Studio Dark Titanium Desktop GUI
-│   │   ├── installer_dialog.py   # Dark Titanium Windows Setup & Uninstaller Wizard
+│   │   ├── app.py                # Dual Simple/Studio Craft Desktop GUI
+│   │   ├── installer_dialog.py   # Windows Setup & Uninstaller Wizard with Browse...
 │   │   ├── mini_hud.py           # Always-on-Top Floating Compact Control Pill
-│   │   ├── step_dialog.py        # Modal Step Inspector with Live Pick XY Capture
-│   │   ├── theme.py              # Dark Titanium Palette, High-DPI & Window Helpers
+│   │   ├── step_dialog.py        # Modal Step Inspector with Bind Key & Pick XY Capture
+│   │   ├── theme.py              # Obsidian/Zinc Palette, High-DPI & Window Helpers
 │   │   └── update_dialog.py      # SHA-256 Verified GitHub Releases Update Sheet
 │   ├── config.py                 # Crash-Safe Config, Custom Presets & Active Profile Backup
 │   ├── installer.py              # Per-User Installer, Shortcuts & Uninstall Registry Manager
