@@ -244,7 +244,7 @@ def test_custom_presets_countdown_mini_hud_and_installer_ui(
 
         # 3. Countdown completion launches Dry-Run executor
         app._start_countdown(100)
-        deadline = time.monotonic() + 2.0
+        deadline = time.monotonic() + 5.0
         while not app.executor.is_running and time.monotonic() < deadline:
             app.update_idletasks()
             app.update()

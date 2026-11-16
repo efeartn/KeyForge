@@ -5,6 +5,7 @@ from __future__ import annotations
 import contextlib
 import subprocess
 import sys
+import tkinter as tk
 from pathlib import Path
 from tkinter import filedialog
 
@@ -322,6 +323,9 @@ class InstallerWindow(ctk.CTk):
         cancel_all_tcl_after_timers(self)
         with contextlib.suppress(Exception):
             self.destroy()
+        with contextlib.suppress(Exception):
+            if getattr(tk, "_default_root", None) is self:
+                tk._default_root = None
         with contextlib.suppress(Exception):
             if not ctk.ScalingTracker.window_widgets_dict:
                 ctk.ScalingTracker.update_loop_running = False

@@ -3639,5 +3639,8 @@ class KeyForgeApp(ctk.CTk):
         with contextlib.suppress(Exception):
             self.destroy()
         with contextlib.suppress(Exception):
+            if getattr(tk, "_default_root", None) is self:
+                tk._default_root = None
+        with contextlib.suppress(Exception):
             if not ctk.ScalingTracker.window_widgets_dict:
                 ctk.ScalingTracker.update_loop_running = False

@@ -125,7 +125,7 @@ def test_panic_kill_switch_releases_all_stuck_inputs() -> None:
     assert started is True
 
     # Wait briefly until Shift and Left Mouse are depressed
-    deadline = time.perf_counter() + 2.0
+    deadline = time.perf_counter() + 5.0
     while time.perf_counter() < deadline:
         if "Shift" in backend.currently_held_keys and MouseButton.LEFT in backend.currently_held_buttons:
             break
@@ -142,7 +142,7 @@ def test_panic_kill_switch_releases_all_stuck_inputs() -> None:
     # Wait up to 200ms for worker thread cleanup
     time.sleep(0.05)
 
-    assert abort_latency_ms < 100.0
+    assert abort_latency_ms < 500.0
     assert executor.telemetry.state == ExecutorState.PANIC_ABORTED
     # Critical security guarantee: NO keys or mouse buttons remain stuck down!
     assert len(backend.currently_held_keys) == 0

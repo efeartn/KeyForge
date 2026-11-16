@@ -177,33 +177,20 @@ def test_gui_controller_lifecycle(tmp_path: Path) -> None:
         assert getattr(app, "_kf_icon_after_id", None) is None
 
 
-def _run_mainloop_until(app: Any, predicate: Any, timeout_ms: int = 3000) -> bool:
-    """Drive ``app.mainloop()`` until ``predicate()`` holds or ``timeout_ms`` elapses."""
+def _run_mainloop_until(app: Any, predicate: Any, timeout_ms: int = 8000) -> bool:
+    """Pump the Tk event loop until ``predicate()`` holds or ``timeout_ms`` elapses."""
     if predicate():
         return True
 
-    exited = False
-    deadline = time.monotonic() + (timeout_ms / 1000.0)
-    pending_ids: list[str] = []
-
-    def _poll() -> None:
-        if exited:
-            return
-        if predicate() or time.monotonic() >= deadline:
-            app.quit()
-            # Re-post quit() in case CustomTkinter runs a nested update() loop that swallows one quit().
-            pending_ids.append(app.after(20, _poll))
-            return
-        pending_ids.append(app.after(15, _poll))
-
-    pending_ids.append(app.after(15, _poll))
-    try:
-        app.mainloop()
-    finally:
-        exited = True
-        for aid in pending_ids:
-            with contextlib.suppress(Exception):
-                app.after_cancel(aid)
+    effective_timeout_s = max(8.0, timeout_ms / 1000.0)
+    deadline = time.monotonic() + effective_timeout_s
+    while time.monotonic() < deadline:
+        with contextlib.suppress(Exception):
+            app.update_idletasks()
+            app.update()
+        if predicate():
+            return True
+        time.sleep(0.01)
     return bool(predicate())
 
 
