@@ -13,11 +13,17 @@ from keyforge.ui.theme import (
     ACCENT_SUCCESS,
     BG_CARD,
     BG_PANEL,
+    BORDER_CONTROL,
     BORDER_SUBTLE,
+    BTN_DANGER_BORDER,
+    BTN_DANGER_SUBTLE,
+    BTN_DANGER_SUBTLE_TEXT,
     BTN_NEUTRAL,
     BTN_NEUTRAL_HOVER,
     CTA_SUCCESS,
     CTA_SUCCESS_HOVER,
+    CTA_TEXT,
+    TEXT_PRIMARY,
     TEXT_SECONDARY,
     apply_window_icon,
     get_fonts,
@@ -95,6 +101,9 @@ class MiniHudWindow(ctk.CTkToplevel):
             height=30,
             fg_color=BTN_NEUTRAL,
             hover_color=BTN_NEUTRAL_HOVER,
+            border_width=1,
+            border_color=BORDER_CONTROL,
+            text_color=TEXT_PRIMARY,
             font=self._fonts["small_bold"],
             command=self._master_app.exit_mini_hud_mode,
         )
@@ -105,8 +114,11 @@ class MiniHudWindow(ctk.CTkToplevel):
             text="Panic",
             width=72,
             height=30,
-            fg_color=ACCENT_DANGER,
-            hover_color=ACCENT_DANGER_HOVER,
+            fg_color=BTN_DANGER_SUBTLE,
+            hover_color=ACCENT_DANGER,
+            border_width=1,
+            border_color=BTN_DANGER_BORDER,
+            text_color=BTN_DANGER_SUBTLE_TEXT,
             font=self._fonts["small_bold"],
             command=self._master_app.trigger_panic_stop,
         )
@@ -115,10 +127,11 @@ class MiniHudWindow(ctk.CTkToplevel):
         self.run_btn = ctk.CTkButton(
             pill,
             text="▶ Start",
-            width=78,
+            width=82,
             height=30,
             fg_color=CTA_SUCCESS,
             hover_color=CTA_SUCCESS_HOVER,
+            text_color=CTA_TEXT,
             font=self._fonts["small_bold"],
             command=self._master_app.toggle_execution,
         )
@@ -149,12 +162,14 @@ class MiniHudWindow(ctk.CTkToplevel):
                 text=f"■ Stop ({start_hk})",
                 fg_color=ACCENT_DANGER,
                 hover_color=ACCENT_DANGER_HOVER,
+                text_color="#FFFFFF",
             )
         else:
             self.run_btn.configure(
                 text=f"▶ Start ({start_hk})",
                 fg_color=CTA_SUCCESS,
                 hover_color=CTA_SUCCESS_HOVER,
+                text_color=CTA_TEXT,
             )
         self.panic_btn.configure(text=f"Panic ({panic_hk})")
 

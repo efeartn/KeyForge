@@ -1,4 +1,4 @@
-"""Minimalist Apple Dark Titanium design language, cached fonts, DPI helpers, and native window styling."""
+"""Minimalist Craft Obsidian & Emerald design system, cached fonts, DPI helpers, and native window styling."""
 
 from __future__ import annotations
 
@@ -16,79 +16,84 @@ from PIL import Image
 from keyforge.assets import get_icon_ico_path, get_icon_png_path
 from keyforge.models.action import ActionType
 
-# Craft Dark Obsidian / Zinc Surface Hierarchy
-BG_ROOT = "#090A0D"
-BG_PANEL = "#111318"
-BG_ELEVATED = "#171A21"
-BG_CARD = "#14171E"
-BG_CARD_HOVER = "#1B1F29"
-BG_CARD_ACTIVE = "#16263D"
-BG_INPUT = "#0C0E12"
+# Craft Obsidian / Deep Slate Surface Hierarchy
+BG_ROOT = "#090C10"
+BG_PANEL = "#0E1319"
+BG_ELEVATED = "#151D27"
+BG_CARD = "#10161E"
+BG_CARD_HOVER = "#161E29"
+BG_CARD_ACTIVE = "#0F271E"
+BG_INPUT = "#0A0E13"
 
-BORDER_SUBTLE = "#222631"
-BORDER_FOCUS = "#3B82F6"
+BORDER_SUBTLE = "#1B2430"
+BORDER_CONTROL = "#222D3D"
+BORDER_FOCUS = "#2EE59D"
 
 # Typography Hierarchy (Crisp High-Legibility)
-TEXT_PRIMARY = "#FFFFFF"
-TEXT_SECONDARY = "#98A2B3"
-TEXT_MUTED = "#667085"
+TEXT_PRIMARY = "#F1F5F9"
+TEXT_SECONDARY = "#8B98A9"
+TEXT_MUTED = "#5E6B7C"
+CTA_TEXT = "#051910"
 
-# Semantic Accents (Apple System Colors)
-ACCENT_PRIMARY = "#0A84FF"  # Apple Blue
-ACCENT_PRIMARY_HOVER = "#0071E3"
-ACCENT_SUCCESS = "#30D158"  # Apple Green
-ACCENT_SUCCESS_HOVER = "#24A143"
-CTA_SUCCESS = "#248A3D"  # Accessible Dark-Mode Filled Green CTA
-CTA_SUCCESS_HOVER = "#1E7A34"
-ACCENT_WARNING = "#FF9F0A"  # Apple Orange
-ACCENT_WARNING_HOVER = "#D98200"
-ACCENT_DANGER = "#FF453A"  # Apple Red
-ACCENT_DANGER_HOVER = "#D93025"
-ACCENT_PURPLE = "#BF5AF2"  # Apple Purple
-ACCENT_PURPLE_HOVER = "#9F37D6"
-ACCENT_CYAN = "#64D2FF"  # Apple Teal/Cyan
+# Cohesive Mint-Emerald + Calm Slate Accent System
+ACCENT_PRIMARY = "#2EE59D"
+ACCENT_PRIMARY_HOVER = "#24CF8B"
+ACCENT_SUCCESS = "#34D399"
+ACCENT_SUCCESS_HOVER = "#22B57E"
+CTA_SUCCESS = "#2EE59D"
+CTA_SUCCESS_HOVER = "#24CF8B"
+SEGMENT_ACTIVE = "#1A222E"
+SEGMENT_ACTIVE_HOVER = "#212B3A"
+ACCENT_WARNING = "#F59E0B"
+ACCENT_WARNING_HOVER = "#D97706"
+ACCENT_DANGER = "#EF4444"
+ACCENT_DANGER_HOVER = "#DC2626"
+ACCENT_PURPLE = "#A78BFA"
+ACCENT_PURPLE_HOVER = "#8B5CF6"
+ACCENT_CYAN = "#38BDF8"
 
-# Calm Neutral Surfaces & Subtle Danger Control
-BTN_NEUTRAL = "#232936"
-BTN_NEUTRAL_HOVER = "#2E3646"
-BTN_SUBTLE = "#1B1F29"
-BTN_SUBTLE_HOVER = "#262C3A"
-BTN_DANGER_SUBTLE = "#2B1418"
-BTN_DANGER_SUBTLE_TEXT = "#FF6B6B"
+# Restrained Hairline-Bordered Neutral & Danger Controls
+BTN_NEUTRAL = "#131922"
+BTN_NEUTRAL_HOVER = "#1A222E"
+BTN_SUBTLE = "#0F141C"
+BTN_SUBTLE_HOVER = "#171F2B"
+BTN_DANGER_SUBTLE = "#201115"
+BTN_DANGER_SUBTLE_TEXT = "#F87171"
+BTN_DANGER_BORDER = "#3B1A22"
 
-BANNER_UPDATE_BG = "#0F291E"
-BANNER_UPDATE_BORDER = "#1D6B44"
+BANNER_UPDATE_BG = "#0C241B"
+BANNER_UPDATE_BORDER = "#1C5A41"
 BANNER_UPDATE_FG = "#6EE7B7"
 
-BANNER_ERR_BG = "#331618"
-BANNER_ERR_BORDER = "#7F2326"
+BANNER_ERR_BG = "#2A1215"
+BANNER_ERR_BORDER = "#692026"
 BANNER_ERR_FG = "#FCA5A5"
 
-BANNER_WARN_BG = "#2D210F"
-BANNER_WARN_BORDER = "#785014"
+BANNER_WARN_BG = "#291E0D"
+BANNER_WARN_BORDER = "#6E4B15"
 BANNER_WARN_FG = "#FDE68A"
 
-BANNER_INFO_BG = "#11223A"
-BANNER_INFO_BORDER = "#1E4B85"
+BANNER_INFO_BG = "#0F1E30"
+BANNER_INFO_BORDER = "#1F426B"
 BANNER_INFO_FG = "#93C5FD"
 
-BADGE_OK_BG = "#102C1E"
-BADGE_OK_FG = "#7EE7A6"
-BADGE_WARN_BG = "#33210C"
-BADGE_WARN_FG = "#FDE68A"
-BADGE_CRIT_BG = "#3D1414"
-BADGE_CRIT_FG = "#FF9E99"
+BADGE_OK_BG = "#0E2920"
+BADGE_OK_FG = "#34D399"
+BADGE_WARN_BG = "#261E0D"
+BADGE_WARN_FG = "#FBBF24"
+BADGE_CRIT_BG = "#2D1215"
+BADGE_CRIT_FG = "#FCA5A5"
 
-# Per-Action Type Visual Identity: (badge_bg, badge_fg, stripe_accent)
+# Per-Action Soft Translucent Pill Identity: (badge_bg, badge_fg, stripe_accent)
 ACTION_VISUAL_STYLE: dict[ActionType, tuple[str, str, str]] = {
-    ActionType.KEY_PRESS: ("#13233F", "#82B4FF", "#0A84FF"),  # System Blue
-    ActionType.KEY_DOWN: ("#182F52", "#A8CBFF", "#5AC8FA"),  # Sky Blue
-    ActionType.KEY_UP: ("#1C212A", "#D0D5DD", "#98A2B3"),  # Slate Titanium
-    ActionType.MOUSE_CLICK: ("#102C1E", "#7EE7A6", "#30D158"),  # Mint Green
-    ActionType.MOUSE_MOVE: ("#112938", "#7DD3FC", "#64D2FF"),  # Teal Cyan
-    ActionType.MOUSE_SCROLL: ("#2C173E", "#E9D5FF", "#BF5AF2"),  # Violet
-    ActionType.WAIT: ("#33210C", "#FDE68A", "#FF9F0A"),  # Amber
-    ActionType.REPEAT_BLOCK: ("#36142A", "#FBCFE8", "#FF375F"),  # Rose Fuchsia
+    ActionType.KEY_PRESS: ("#0E2920", "#34D399", "#34D399"),  # Emerald Mint
+    ActionType.KEY_DOWN: ("#0E2433", "#38BDF8", "#38BDF8"),  # Sky Blue
+    ActionType.KEY_UP: ("#18202B", "#94A3B8", "#94A3B8"),  # Neutral Slate
+    ActionType.MOUSE_CLICK: ("#0E2A26", "#2DD4BF", "#2DD4BF"),  # Teal
+    ActionType.MOUSE_MOVE: ("#102436", "#60A5FA", "#60A5FA"),  # Soft Sapphire
+    ActionType.MOUSE_SCROLL: ("#1E1A36", "#A78BFA", "#A78BFA"),  # Muted Indigo
+    ActionType.WAIT: ("#271F0E", "#FBBF24", "#FBBF24"),  # Warm Amber
+    ActionType.REPEAT_BLOCK: ("#2C1625", "#F472B6", "#F472B6"),  # Soft Rose
 }
 
 
@@ -155,15 +160,17 @@ def get_fonts(root: Any) -> dict[str, ctk.CTkFont]:
         "small_bold": ctk.CTkFont(family=ui_family, size=11, weight="bold"),
         "caption": ctk.CTkFont(family=ui_family, size=10, weight="normal"),
         "caption_bold": ctk.CTkFont(family=ui_family, size=10, weight="bold"),
+        "micro": ctk.CTkFont(family=ui_family, size=10, weight="normal"),
+        "micro_bold": ctk.CTkFont(family=ui_family, size=10, weight="bold"),
         "mono": ctk.CTkFont(family=mono_family, size=12, weight="normal"),
         "mono_bold": ctk.CTkFont(family=mono_family, size=12, weight="bold"),
         "mono_small": ctk.CTkFont(family=mono_family, size=11, weight="normal"),
         "mono_small_bold": ctk.CTkFont(family=mono_family, size=11, weight="bold"),
         "mono_metric": ctk.CTkFont(family=mono_family, size=14, weight="bold"),
-        "step_idx": ctk.CTkFont(family=mono_family, size=12, weight="bold"),
-        "step_badge": ctk.CTkFont(family=ui_family, size=11, weight="bold"),
+        "step_idx": ctk.CTkFont(family=mono_family, size=11, weight="bold"),
+        "step_badge": ctk.CTkFont(family=ui_family, size=10, weight="bold"),
         "step_title": ctk.CTkFont(family=ui_family, size=13, weight="bold"),
-        "step_sub": ctk.CTkFont(family=ui_family, size=10, weight="normal"),
+        "step_sub": ctk.CTkFont(family=ui_family, size=11, weight="normal"),
         "step_metric": ctk.CTkFont(family=mono_family, size=11, weight="normal"),
     }
     owner._kf_fonts_cache = fonts

@@ -30,11 +30,13 @@ from keyforge.ui.theme import (
     BG_ELEVATED,
     BG_INPUT,
     BG_PANEL,
+    BORDER_CONTROL,
     BORDER_SUBTLE,
     BTN_NEUTRAL,
     BTN_NEUTRAL_HOVER,
     CTA_SUCCESS,
     CTA_SUCCESS_HOVER,
+    CTA_TEXT,
     TEXT_MUTED,
     TEXT_PRIMARY,
     TEXT_SECONDARY,
@@ -217,6 +219,9 @@ class UpdateDialog(ctk.CTkToplevel):
             height=30,
             fg_color=BTN_NEUTRAL,
             hover_color=BTN_NEUTRAL_HOVER,
+            border_width=1,
+            border_color=BORDER_CONTROL,
+            text_color=TEXT_PRIMARY,
             font=self._fonts["small_bold"],
             command=self.check_for_updates,
         )
@@ -318,9 +323,9 @@ class UpdateDialog(ctk.CTkToplevel):
 
         self.progress_bar = ctk.CTkProgressBar(
             prog_frame,
-            height=7,
+            height=6,
             fg_color=BG_INPUT,
-            progress_color=ACCENT_PRIMARY,
+            progress_color=BG_INPUT,
         )
         self.progress_bar.set(0.0)
         self.progress_bar.pack(fill="x")
@@ -336,6 +341,9 @@ class UpdateDialog(ctk.CTkToplevel):
             height=34,
             fg_color=BTN_NEUTRAL,
             hover_color=BTN_NEUTRAL_HOVER,
+            border_width=1,
+            border_color=BORDER_CONTROL,
+            text_color=TEXT_PRIMARY,
             font=self._fonts["body_bold"],
             command=self._on_secondary_clicked,
         )
@@ -348,6 +356,8 @@ class UpdateDialog(ctk.CTkToplevel):
             height=34,
             fg_color=CTA_SUCCESS,
             hover_color=CTA_SUCCESS_HOVER,
+            text_color=CTA_TEXT,
+            text_color_disabled="#1B4D38",
             font=self._fonts["body_bold"],
             state="disabled",
             command=self.start_download_and_install,
@@ -375,7 +385,7 @@ class UpdateDialog(ctk.CTkToplevel):
         self.meta_lbl.configure(text=f"Querying github.com/{DEFAULT_REPO}...")
         self.sha_pill.configure(text="Checking...", fg_color=BG_ELEVATED, text_color=TEXT_SECONDARY)
         self.progress_lbl.configure(text="Contacting GitHub Releases...", text_color=TEXT_SECONDARY)
-        self.progress_bar.configure(mode="indeterminate")
+        self.progress_bar.configure(mode="indeterminate", progress_color=ACCENT_PRIMARY)
         self.progress_bar.start()
 
         self._ensure_queue_polling()
@@ -397,7 +407,7 @@ class UpdateDialog(ctk.CTkToplevel):
     def _on_check_success(self, release: ReleaseInfo) -> None:
         self._is_checking = False
         self.progress_bar.stop()
-        self.progress_bar.configure(mode="determinate")
+        self.progress_bar.configure(mode="determinate", progress_color=BG_INPUT)
         self.progress_bar.set(0.0)
         self.check_again_btn.configure(state="normal", text="Check Again")
         self._release = release
@@ -409,7 +419,7 @@ class UpdateDialog(ctk.CTkToplevel):
     def _on_check_error(self, message: str) -> None:
         self._is_checking = False
         self.progress_bar.stop()
-        self.progress_bar.configure(mode="determinate")
+        self.progress_bar.configure(mode="determinate", progress_color=BG_INPUT)
         self.progress_bar.set(0.0)
         self.check_again_btn.configure(state="normal", text="Check Again")
         self.status_title_lbl.configure(text="Update Check Failed", text_color=ACCENT_WARNING)
@@ -546,6 +556,7 @@ class UpdateDialog(ctk.CTkToplevel):
         if total and total > 0:
             ratio = min(1.0, max(0.0, downloaded / float(total)))
             pct = int(ratio * 100)
+            self.progress_bar.configure(progress_color=ACCENT_PRIMARY if ratio > 0 else BG_INPUT)
             self.progress_bar.set(ratio)
             self.progress_lbl.configure(
                 text=f"Downloading {_format_bytes(downloaded)} / {_format_bytes(total)} ({pct}%)",
@@ -566,6 +577,7 @@ class UpdateDialog(ctk.CTkToplevel):
                 state="normal",
                 text="Update Now" if getattr(sys, "frozen", False) else "Download & Verify",
             )
+        self.progress_bar.configure(progress_color=BG_INPUT)
         self.progress_bar.set(0.0)
         if cancelled:
             self.progress_lbl.configure(text="Download cancelled.", text_color=TEXT_SECONDARY)
@@ -575,6 +587,7 @@ class UpdateDialog(ctk.CTkToplevel):
     def _on_download_complete(self, downloaded_path: Path) -> None:
         self._is_downloading = False
         self._downloaded_path = downloaded_path
+        self.progress_bar.configure(progress_color=ACCENT_PRIMARY)
         self.progress_bar.set(1.0)
         self.secondary_btn.configure(text="Close", state="normal")
         self.check_again_btn.configure(state="normal")

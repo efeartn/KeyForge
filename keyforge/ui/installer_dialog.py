@@ -27,11 +27,13 @@ from keyforge.ui.theme import (
     BG_INPUT,
     BG_PANEL,
     BG_ROOT,
+    BORDER_CONTROL,
     BORDER_SUBTLE,
     BTN_NEUTRAL,
     BTN_NEUTRAL_HOVER,
     CTA_SUCCESS,
     CTA_SUCCESS_HOVER,
+    CTA_TEXT,
     TEXT_MUTED,
     TEXT_PRIMARY,
     TEXT_SECONDARY,
@@ -146,6 +148,9 @@ class InstallerWindow(ctk.CTk):
                 height=26,
                 fg_color=BTN_NEUTRAL,
                 hover_color=BTN_NEUTRAL_HOVER,
+                border_width=1,
+                border_color=BORDER_CONTROL,
+                text_color=TEXT_PRIMARY,
                 font=self.fonts["small_bold"],
                 command=self._browse_install_dir,
             )
@@ -175,18 +180,33 @@ class InstallerWindow(ctk.CTk):
                 opts_card,
                 text="Create Desktop shortcut",
                 variable=self.desktop_var,
+                fg_color=CTA_SUCCESS,
+                hover_color=CTA_SUCCESS_HOVER,
+                checkmark_color=CTA_TEXT,
+                border_color=BORDER_CONTROL,
+                border_width=1,
                 font=self.fonts["body"],
             ).pack(anchor="w", padx=14, pady=(12, 6))
             ctk.CTkCheckBox(
                 opts_card,
                 text="Create Start Menu shortcut",
                 variable=self.start_menu_var,
+                fg_color=CTA_SUCCESS,
+                hover_color=CTA_SUCCESS_HOVER,
+                checkmark_color=CTA_TEXT,
+                border_color=BORDER_CONTROL,
+                border_width=1,
                 font=self.fonts["body"],
             ).pack(anchor="w", padx=14, pady=6)
             ctk.CTkCheckBox(
                 opts_card,
                 text="Launch KeyForge when setup finishes",
                 variable=self.launch_var,
+                fg_color=CTA_SUCCESS,
+                hover_color=CTA_SUCCESS_HOVER,
+                checkmark_color=CTA_TEXT,
+                border_color=BORDER_CONTROL,
+                border_width=1,
                 font=self.fonts["body"],
             ).pack(anchor="w", padx=14, pady=6)
             note_text = f"Configs & saved macros in {config_dir} are automatically preserved."
@@ -198,6 +218,8 @@ class InstallerWindow(ctk.CTk):
                 font=self.fonts["body_bold"],
                 fg_color=ACCENT_DANGER,
                 hover_color=ACCENT_DANGER_HOVER,
+                border_color=BORDER_CONTROL,
+                border_width=1,
             ).pack(anchor="w", padx=14, pady=(16, 8))
             note_text = f"Left unchecked, your saved data in {config_dir} remains safe for future reinstalls."
 
@@ -231,6 +253,9 @@ class InstallerWindow(ctk.CTk):
             height=36,
             fg_color=BTN_NEUTRAL,
             hover_color=BTN_NEUTRAL_HOVER,
+            border_width=1,
+            border_color=BORDER_CONTROL,
+            text_color=TEXT_PRIMARY,
             font=self.fonts["body_bold"],
             command=self._on_close,
         )
@@ -239,6 +264,7 @@ class InstallerWindow(ctk.CTk):
         btn_text = f"Install KeyForge v{__version__}" if self._mode == "setup" else "Uninstall KeyForge"
         btn_fg = CTA_SUCCESS if self._mode == "setup" else ACCENT_DANGER
         btn_hover = CTA_SUCCESS_HOVER if self._mode == "setup" else ACCENT_DANGER_HOVER
+        btn_txt_color = CTA_TEXT if self._mode == "setup" else "#FFFFFF"
         self.action_btn = ctk.CTkButton(
             footer,
             text=btn_text,
@@ -246,6 +272,7 @@ class InstallerWindow(ctk.CTk):
             height=36,
             fg_color=btn_fg,
             hover_color=btn_hover,
+            text_color=btn_txt_color,
             font=self.fonts["cta"],
             command=self._on_primary_action,
         )
@@ -270,7 +297,7 @@ class InstallerWindow(ctk.CTk):
                     text=f"Installed KeyForge v{__version__} to {self._target_dir}",
                     text_color=ACCENT_SUCCESS,
                 )
-                self.action_btn.configure(text="Finish", state="normal", fg_color=ACCENT_PRIMARY)
+                self.action_btn.configure(text="Finish", state="normal", fg_color=ACCENT_PRIMARY, text_color=CTA_TEXT)
                 if self.launch_var.get() and installed_exe.is_file():
                     with contextlib.suppress(Exception):
                         if sys.platform == "win32" or installed_exe.suffix.lower() == ".exe":
@@ -289,7 +316,7 @@ class InstallerWindow(ctk.CTk):
                     else "KeyForge uninstalled. Saved macros and configs were preserved."
                 )
                 self.status_lbl.configure(text=kept_note, text_color=ACCENT_SUCCESS)
-                self.action_btn.configure(text="Done", state="normal", fg_color=ACCENT_PRIMARY)
+                self.action_btn.configure(text="Done", state="normal", fg_color=ACCENT_PRIMARY, text_color=CTA_TEXT)
         except Exception as exc:
             self.status_lbl.configure(text=f"Operation failed: {exc}", text_color=ACCENT_DANGER)
             self.action_btn.configure(state="normal")

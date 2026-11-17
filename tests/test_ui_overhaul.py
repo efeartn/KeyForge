@@ -386,3 +386,48 @@ def test_step_row_widget_pool_reuses_widgets_in_place_and_bounds_console_log(
     finally:
         if not app._closing:
             app._on_close()
+
+
+def test_category_filters_clean_step_labels_and_zero_clipping_bounds(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("KEYFORGE_CONFIG_DIR", str(tmp_path))
+    app = KeyForgeApp(start_hotkey_listener=False)
+    try:
+        app._switch_ui_mode("Studio")
+        app._apply_template_chip("Press E -> Wait 200ms -> Click -> Press 1")
+        assert len(app._step_row_frames) == 4
+
+        # Category filter pills slice steps cleanly without mutating underlying profile actions
+        app._set_step_type_filter("key")
+        assert len(app._step_row_frames) == 2
+        app._set_step_type_filter("wait")
+        assert len(app._step_row_frames) == 1
+        app._set_step_type_filter("mouse")
+        assert len(app._step_row_frames) == 1
+        app._set_step_type_filter("all")
+        assert len(app._step_row_frames) == 4
+
+        # Clean step headline & subtitle avoid duplicated "Tap •" or bracket clutter
+        tagged_press = make_key_press("E", hold_ms=25, label="Tap E")
+        tagged_wait = make_wait(75, jitter_ms=10, label="Repeat Interval")
+        assert KeyForgeApp._step_headline(tagged_press) == "Press [E]"
+        assert KeyForgeApp._step_subtitle(tagged_press) == "Tap E • 25ms hold"
+        assert KeyForgeApp._step_headline(tagged_wait) == "Wait 75ms"
+        assert KeyForgeApp._step_subtitle(tagged_wait) == "Repeat Interval • 65–85ms"
+
+        # Responsive header and CTA stay completely within realized window bounds even at 960x660
+        app.geometry("960x660")
+        app.update_idletasks()
+        app.update()
+        win_left = app.winfo_rootx()
+        win_right = win_left + app.winfo_width()
+        for widget in (app.mode_switcher, app.updates_btn, app.mini_hud_btn, app.top_panic_btn, app.run_toggle_btn):
+            w_left = widget.winfo_rootx()
+            w_right = w_left + widget.winfo_width()
+            assert w_left >= win_left
+            assert w_right <= win_right
+    finally:
+        if not app._closing:
+            app._on_close()

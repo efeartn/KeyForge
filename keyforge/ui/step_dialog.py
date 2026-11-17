@@ -23,17 +23,19 @@ from keyforge.models.keymap import (
 )
 from keyforge.ui.theme import (
     ACCENT_DANGER,
-    ACCENT_PRIMARY,
-    ACCENT_PRIMARY_HOVER,
     ACCENT_WARNING,
     ACCENT_WARNING_HOVER,
     BG_CARD,
     BG_ELEVATED,
     BG_INPUT,
     BG_PANEL,
+    BORDER_CONTROL,
     BORDER_SUBTLE,
     BTN_NEUTRAL,
     BTN_NEUTRAL_HOVER,
+    CTA_SUCCESS,
+    CTA_SUCCESS_HOVER,
+    CTA_TEXT,
     TEXT_MUTED,
     TEXT_PRIMARY,
     TEXT_SECONDARY,
@@ -223,6 +225,9 @@ class StepEditorDialog(ctk.CTkToplevel):
             text="Cancel",
             fg_color=BTN_NEUTRAL,
             hover_color=BTN_NEUTRAL_HOVER,
+            border_width=1,
+            border_color=BORDER_CONTROL,
+            text_color=TEXT_PRIMARY,
             width=104,
             height=32,
             font=self._fonts["body"],
@@ -232,8 +237,9 @@ class StepEditorDialog(ctk.CTkToplevel):
         ctk.CTkButton(
             btn_row,
             text="Save Step",
-            fg_color=ACCENT_PRIMARY,
-            hover_color=ACCENT_PRIMARY_HOVER,
+            fg_color=CTA_SUCCESS,
+            hover_color=CTA_SUCCESS_HOVER,
+            text_color=CTA_TEXT,
             width=132,
             height=32,
             font=self._fonts["body_bold"],
@@ -263,6 +269,7 @@ class StepEditorDialog(ctk.CTkToplevel):
             text="Press key...",
             fg_color=ACCENT_WARNING,
             hover_color=ACCENT_WARNING_HOVER,
+            border_color=ACCENT_WARNING,
             text_color="#090A0D",
         )
         with contextlib.suppress(Exception):
@@ -281,6 +288,7 @@ class StepEditorDialog(ctk.CTkToplevel):
                 text="Bind Key",
                 fg_color=BTN_NEUTRAL,
                 hover_color=BTN_NEUTRAL_HOVER,
+                border_color=BORDER_CONTROL,
                 text_color=TEXT_PRIMARY,
             )
 
@@ -348,6 +356,9 @@ class StepEditorDialog(ctk.CTkToplevel):
                 height=28,
                 fg_color=BTN_NEUTRAL,
                 hover_color=BTN_NEUTRAL_HOVER,
+                border_width=1,
+                border_color=BORDER_CONTROL,
+                text_color=TEXT_PRIMARY,
                 font=self._fonts["small_bold"],
                 command=self.start_key_capture,
             )
@@ -456,6 +467,9 @@ class StepEditorDialog(ctk.CTkToplevel):
                 height=28,
                 fg_color=BTN_NEUTRAL,
                 hover_color=BTN_NEUTRAL_HOVER,
+                border_width=1,
+                border_color=BORDER_CONTROL,
+                text_color=TEXT_PRIMARY,
                 font=self._fonts["small_bold"],
                 command=self._capture_current_xy,
             ).pack(side="left", padx=6)
@@ -498,6 +512,9 @@ class StepEditorDialog(ctk.CTkToplevel):
                 height=28,
                 fg_color=BTN_NEUTRAL,
                 hover_color=BTN_NEUTRAL_HOVER,
+                border_width=1,
+                border_color=BORDER_CONTROL,
+                text_color=TEXT_PRIMARY,
                 font=self._fonts["small_bold"],
                 command=self._capture_current_xy,
             ).pack(side="left", padx=6)

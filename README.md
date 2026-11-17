@@ -4,17 +4,17 @@
 
 # KeyForge
 
-**Precision Obsidian & Zinc Keyboard & Macro Sequence Studio & Live Input Recorder.**  
+**Precision Obsidian & Mint Emerald Keyboard & Macro Sequence Studio & Live Input Recorder.**  
 Free, Open-Source (`GPL-3.0`), Cybersecurity-Hardened, and Native for Windows, macOS & Linux — with Zero Browser Bloat.
 
 [![CI & Release Compiler](https://github.com/efeartn/KeyForge/actions/workflows/ci.yml/badge.svg)](https://github.com/efeartn/KeyForge/actions/workflows/ci.yml)
-[![Latest Release](https://img.shields.io/github/v/release/efeartn/KeyForge?color=3B82F6&label=Release)](https://github.com/efeartn/KeyForge/releases/latest)
+[![Latest Release](https://img.shields.io/github/v/release/efeartn/KeyForge?color=2EE59D&label=Release)](https://github.com/efeartn/KeyForge/releases/latest)
 [![Platform: Windows | macOS | Linux](https://img.shields.io/badge/Platform-Windows%20%7C%20macOS%20%7C%20Linux-0EA5E9)](https://github.com/efeartn/KeyForge/releases/latest)
 [![Python: 3.10+](https://img.shields.io/badge/Python-3.10%20%7C%203.11%20%7C%203.12%20%7C%203.13-3776AB)](pyproject.toml)
 [![Security: SHA-256 Signed + Static Auditor](https://img.shields.io/badge/Security-SHA--256%20Verified%20%2B%20Static%20Auditor-10B981)](SECURITY.md)
 [![License: GPL-3.0](https://img.shields.io/badge/License-GPL--3.0-8B5CF6.svg)](LICENSE)
 
-[**Download v1.4.0**](#download-standalone-executables) • [**Visual Tour**](#visual-tour) • [**Setup Installer & Updater**](#windows-setup-installer--auto-updater) • [**Sequence DSL**](#sequence-dsl-reference) • [**Cybersecurity**](#cybersecurity--safety-engineering) • [**CLI & Source**](#installation--quick-start)
+[**Download v1.5.0**](#download-standalone-executables) • [**Release Notes**](RELEASE_NOTES.md) • [**Visual Tour**](#visual-tour) • [**Setup Installer & Updater**](#windows-setup-installer--auto-updater) • [**Sequence DSL**](#sequence-dsl-reference) • [**Cybersecurity**](#cybersecurity--safety-engineering) • [**CLI & Source**](#installation--quick-start)
 
 </div>
 
@@ -23,9 +23,9 @@ Free, Open-Source (`GPL-3.0`), Cybersecurity-Hardened, and Native for Windows, m
 ## Studio Workspace at a Glance
 
 <div align="center">
-  <img src="docs/screenshots/studio_mode.png" alt="KeyForge Studio Mode Obsidian Dark Desktop Interface" width="100%" />
+  <img src="docs/screenshots/studio_mode.png" alt="KeyForge Studio Mode Obsidian and Mint Emerald Desktop Interface" width="100%" />
   <br />
-  <sub><b>Studio Mode (v1.4.0)</b> — Single-line transport &amp; telemetry strip, interactive click-to-bind hotkeys, keyboard-navigable sequence cards (<code>Del</code> / <code>Ctrl+D</code> / <code>Space</code> / <code>Alt+↑/↓</code>), custom saved presets (<code>+ Preset</code>), pre-start countdown (<code>0s–5s</code>), and compact <b>Mini HUD</b>.</sub>
+  <sub><b>Studio Mode (v1.5.0)</b> — Decluttered top utility header, <b>4-Card Hero Control Strip</b> (Profile, Engine Telemetry, Hotkeys &amp; Dry-Run, Delay &amp; Start CTA), <b>All Steps / Keys / Waits / Mouse</b> filter pills with <code>/</code> quick search, aligned timeline cards, keyboard shortcuts (<code>Del</code> / <code>Ctrl+D</code> / <code>Space</code> / <code>Alt+↑/↓</code>), and compact <b>Mini HUD</b>.</sub>
 </div>
 
 ---
@@ -34,7 +34,7 @@ Free, Open-Source (`GPL-3.0`), Cybersecurity-Hardened, and Native for Windows, m
 
 ### Dual Workspaces: `Simple` & `Studio`
 
-KeyForge adapts smoothly from quick keyboard automation to full multi-step sequence engineering without forcing complex timelines onto everyday workflows.
+KeyForge adapts smoothly from quick keyboard automation to full multi-step sequence engineering without forcing complex timelines onto everyday workflows — styled uniformly with deep charcoal-obsidian surfaces (`#090C10` / `#0E1319`), hairline `1px` borders, and a restrained Mint Emerald CTA (`#2EE59D`).
 
 <table>
   <tr>
@@ -44,10 +44,10 @@ KeyForge adapts smoothly from quick keyboard automation to full multi-step seque
     <td width="42%" valign="top">
       <h3>Everyday Keyboard Automation</h3>
       <ul>
-        <li><b>Two Live Modes:</b> Toggle between <b>Simple</b> (Key Repeater &amp; Quick Sequence) and <b>Studio</b> (full visual timeline) with live bidirectional profile syncing.</li>
-        <li><b>Click-to-Bind Key Capture &amp; Presets:</b> Click <b>Bind Key</b> to capture any physical key or modifier combo (e.g. <code>Ctrl+Shift+F</code>) and pick speed presets (<code>25ms–500ms</code>) or save custom profiles with <code>+ Preset</code>.</li>
-        <li><b>Pre-Start Countdown &amp; Shortcuts:</b> Set a <code>0s–5s</code> Start Delay in Simple or Studio mode, and manage timeline steps quickly with <code>Del</code>, <code>Ctrl+D</code>, <code>Space</code>, and <code>Alt+↑/↓</code>.</li>
-        <li><b>Built for Older &amp; Low-RAM PCs:</b> Native <code>CustomTkinter</code> + <code>Pillow</code> UI with zero Chromium/WebView runtime overhead and responsive High-DPI sizing.</li>
+        <li><b>Two Synchronized Modes:</b> Toggle cleanly between <b>Simple</b> (Key Repeater &amp; Quick Sequence) and <b>Studio</b> (4-card hero strip + timeline) with live bidirectional profile sync.</li>
+        <li><b>Click-to-Bind Key Capture &amp; Presets:</b> Click <b>Bind Key</b> to capture any physical key or modifier combo (e.g. <code>Ctrl+Shift+F</code>), use speed presets (<code>25ms–500ms</code>), or save custom profiles via <b>+ Save Preset</b>.</li>
+        <li><b>Fast Step Filtering &amp; Shortcuts:</b> Slice steps by <b>Keys</b>, <b>Waits</b>, or <b>Mouse</b>, press <code>/</code> to filter, and manage timeline rows via <code>Del</code>, <code>Ctrl+D</code>, <code>Space</code>, and <code>Alt+↑/↓</code>.</li>
+        <li><b>Low-Spec &amp; Low-RAM Optimized:</b> Pure <code>CustomTkinter</code> + <code>Pillow</code> UI with zero Chromium/WebView subprocess bloat, a warm 64-slot pooled timeline renderer, and dirty-checked telemetry (~44.6 MB Private RAM idle on Windows).</li>
       </ul>
     </td>
   </tr>
@@ -67,7 +67,7 @@ KeyForge adapts smoothly from quick keyboard automation to full multi-step seque
       </p>
     </td>
     <td width="50%" valign="top" align="center">
-      <img src="docs/screenshots/setup_installer.png" alt="KeyForge v1.4.0 Setup Installer Wizard with Browse Button" width="90%" />
+      <img src="docs/screenshots/setup_installer.png" alt="KeyForge v1.5.0 Setup Installer Wizard with Browse Button" width="90%" />
       <p align="left">
         <b>Windows Setup Installer &amp; Uninstaller</b><br />
         Run <code>KeyForge-Setup-Windows-x64.exe</code> to choose a destination with <b>Browse...</b>, install per-user without admin UAC prompts, create Desktop &amp; Start Menu shortcuts, and preserve user configs &amp; macros on uninstall unless opted out.
@@ -258,16 +258,17 @@ KeyForge/
 │   │   ├── integrity.py          # Canonical SHA-256 Signing & Constant-Time Verification
 │   │   └── validator.py          # Allowlist Schema, Path & Complexity Budget Validator
 │   ├── ui/
-│   │   ├── app.py                # Dual Simple/Studio Craft Desktop GUI
+│   │   ├── app.py                # Dual Simple/Studio Obsidian Desktop GUI & 4-Card Hero
 │   │   ├── installer_dialog.py   # Windows Setup & Uninstaller Wizard with Browse...
 │   │   ├── mini_hud.py           # Always-on-Top Floating Compact Control Pill
 │   │   ├── step_dialog.py        # Modal Step Inspector with Bind Key & Pick XY Capture
-│   │   ├── theme.py              # Obsidian/Zinc Palette, High-DPI & Window Helpers
+│   │   ├── theme.py              # Obsidian/Emerald Palette, High-DPI & Window Helpers
 │   │   └── update_dialog.py      # SHA-256 Verified GitHub Releases Update Sheet
 │   ├── config.py                 # Crash-Safe Config, Custom Presets & Active Profile Backup
 │   ├── installer.py              # Per-User Installer, Shortcuts & Uninstall Registry Manager
 │   ├── main.py                   # Setup Wizard, CLI & Desktop GUI Entry Point
 │   └── updater.py                # SemVer Client, SHA-256 Verifier & Atomic Hot-Swapper
+├── RELEASE_NOTES.md              # Latest Release Notes (Published to GitHub Releases)
 ├── scripts/build_exe.py          # Cross-Platform PyInstaller Compiler + SHA-256 Generator
 └── tests/                        # Unit, Security, Updater, Config, Engine, CLI & UI Tests
 ```
