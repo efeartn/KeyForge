@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 import contextlib
+import sys
 from collections.abc import Callable
 
 import customtkinter as ctk
 
-from keyforge.engine.win32_input import IS_WINDOWS, get_system_cursor_pos
+from keyforge.engine.platform_input import get_platform_capabilities, platform_get_cursor_pos
 from keyforge.models.action import (
     ActionType,
     ClickType,
@@ -136,8 +137,9 @@ class StepEditorDialog(ctk.CTkToplevel):
 
         self.bind("<Escape>", self._on_escape_pressed)
         self.protocol("WM_DELETE_WINDOW", self._on_close)
-        # Use Ctrl+Enter rather than global <Return> so CTkComboBox input/selection never misfires.
+        # Use Ctrl+Enter / Cmd+Enter rather than global <Return> so CTkComboBox input/selection never misfires.
         self.bind("<Control-Return>", lambda _e: self._on_submit())
+        self.bind("<Command-Return>", lambda _e: self._on_submit())
 
         self._build_ui()
         if initial_action is not None:
@@ -215,7 +217,7 @@ class StepEditorDialog(ctk.CTkToplevel):
 
         ctk.CTkLabel(
             btn_row,
-            text="Ctrl+Enter to save",
+            text="⌘+Enter to save" if sys.platform == "darwin" else "Ctrl+Enter to save",
             font=self._fonts["caption"],
             text_color=TEXT_MUTED,
         ).pack(side="left")
@@ -566,8 +568,8 @@ class StepEditorDialog(ctk.CTkToplevel):
             self.repeat_note_lbl.pack(anchor="w", pady=(4, 0))
 
     def _capture_current_xy(self) -> None:
-        if IS_WINDOWS:
-            cx, cy = get_system_cursor_pos()
+        if get_platform_capabilities().can_poll_cursor:
+            cx, cy = platform_get_cursor_pos()
         else:
             cx, cy = self.winfo_pointerx(), self.winfo_pointery()
         if hasattr(self, "x_entry") and hasattr(self, "y_entry"):

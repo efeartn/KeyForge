@@ -31,8 +31,12 @@ from keyforge.config import (
 from keyforge.engine.backend import DryRunBackend
 from keyforge.engine.executor import ExecutionTelemetry, ExecutorState, MacroExecutor
 from keyforge.engine.hotkeys import GlobalHotkeyManager
+from keyforge.engine.platform_input import (
+    create_os_input_backend,
+    get_platform_capabilities,
+    platform_supports_key_polling,
+)
 from keyforge.engine.recorder import MacroRecorder, RecorderConfig
-from keyforge.engine.win32_input import IS_WINDOWS, Win32InputBackend
 from keyforge.models.action import (
     ActionType,
     ClickType,
@@ -122,6 +126,7 @@ from keyforge.ui.theme import (
     center_window_on_parent,
     get_badge_colors,
     get_fonts,
+    get_geometry_coord_scale,
     get_logical_workarea,
     load_brand_ctk_image,
 )
@@ -231,18 +236,22 @@ class KeyForgeApp(ctk.CTk):
                     self.profile.validate()
 
         # Core Engines
-        self.win32_backend = Win32InputBackend()
+        self.os_backend = create_os_input_backend()
+        self.win32_backend = self.os_backend  # Backward-compatible attribute alias
+        self._platform_caps = get_platform_capabilities(self.os_backend)
         self.dry_run_backend = DryRunBackend()
-        self.executor = MacroExecutor(backend=self.win32_backend)
+        self.executor = MacroExecutor(backend=self.os_backend)
         self.recorder = MacroRecorder(config=RecorderConfig())
         self.hotkey_manager = GlobalHotkeyManager()
 
         # Internal UI & Performance State
         self._closing = False
-        self._hotkey_listener_enabled = bool(start_hotkey_listener)
+        self._hotkey_listener_enabled = bool(start_hotkey_listener and platform_supports_key_polling())
         self._active_step_id: str | None = None
         self._selected_step_index: int | None = 0 if self.profile.actions else None
+        self._visible_step_indices: list[int] = []
         self._step_row_frames: dict[str, ctk.CTkFrame] = {}
+        self._step_slots_by_id: dict[str, dict[str, Any]] = {}
         self._step_row_pool: list[dict[str, Any]] = []
         self._empty_sequence_lbl: ctk.CTkLabel | None = None
         self._console_line_count: int = 0
@@ -314,7 +323,17 @@ class KeyForgeApp(ctk.CTk):
         self.bind("<Control-y>", self._on_ctrl_y)
         self.bind("<Control-Shift-Z>", self._on_ctrl_y)
         self.bind("<Control-s>", lambda _e: self.action_save_profile_dialog())
+        self.bind("<Control-o>", lambda _e: self.action_open_profile_dialog())
+        self.bind("<Control-n>", lambda _e: self.action_new_profile())
         self.bind("<Control-d>", self._on_ctrl_d)
+        if sys.platform == "darwin":
+            self.bind("<Command-z>", self._on_ctrl_z)
+            self.bind("<Command-Shift-Z>", self._on_ctrl_y)
+            self.bind("<Command-y>", self._on_ctrl_y)
+            self.bind("<Command-s>", lambda _e: self.action_save_profile_dialog())
+            self.bind("<Command-o>", lambda _e: self.action_open_profile_dialog())
+            self.bind("<Command-n>", lambda _e: self.action_new_profile())
+            self.bind("<Command-d>", self._on_ctrl_d)
         self.bind("<Delete>", self._on_delete_key)
         self.bind("<BackSpace>", self._on_delete_key)
         self.bind("<space>", self._on_space_key)
@@ -331,13 +350,13 @@ class KeyForgeApp(ctk.CTk):
         self._sync_profile_to_simple_view()
         self.run_security_audit()
         self._log_event(
-            f"KeyForge v{__version__} ({_platform_badge_label()}) ready. "
+            f"KeyForge v{__version__} ({_platform_badge_label()} · {self._platform_caps.backend_name}) ready. "
             f"Panic Stop armed on [{self.profile.panic_hotkey}]."
         )
 
         # Global Hotkeys
         self._rebind_hotkeys()
-        if start_hotkey_listener:
+        if self._hotkey_listener_enabled:
             self.hotkey_manager.start()
             self._schedule_hotkey_poll()
 
@@ -354,6 +373,7 @@ class KeyForgeApp(ctk.CTk):
 
     def _configure_initial_geometry(self) -> None:
         work_left, work_top, work_w, work_h, scale = get_logical_workarea(self)
+        coord_scale = get_geometry_coord_scale(scale)
         avail_w = max(640, work_w - 40)
         avail_h = max(400, work_h - 48)
         target_w = min(1140, avail_w)
@@ -373,7 +393,7 @@ class KeyForgeApp(ctk.CTk):
                 if match.group(3) is not None and match.group(4) is not None:
                     x_px = int(match.group(3))
                     y_px = int(match.group(4))
-                    if _is_point_on_screen(self, x_px, y_px, round(w * scale), round(h * scale)):
+                    if _is_point_on_screen(self, x_px, y_px, round(w * coord_scale), round(h * coord_scale)):
                         self.geometry(f"{w}x{h}+{x_px}+{y_px}")
                         return
                 center_window_on_parent(self, None, w, h)
@@ -628,9 +648,10 @@ class KeyForgeApp(ctk.CTk):
         )
         self.footer_status_lbl.pack(side="left", padx=14, pady=2)
 
+        dup_hint = "⌘D Dup" if sys.platform == "darwin" else "Ctrl+D Dup"
         ctk.CTkLabel(
             sbar,
-            text="/ Filter  ·  Del Delete  ·  Ctrl+D Dup  ·  Space Toggle  ·  Alt+↑/↓ Move  ·  Dbl-Click Edit",
+            text=f"/ Filter  ·  Del Delete  ·  {dup_hint}  ·  Space Toggle  ·  Alt+↑/↓ Move  ·  Dbl-Click Edit",
             font=self.fonts["small"],
             text_color=TEXT_MUTED,
         ).pack(side="right", padx=14, pady=2)
@@ -1899,6 +1920,7 @@ class KeyForgeApp(ctk.CTk):
             text_color=TEXT_PRIMARY,
             font=self.fonts["mono_small"],
             corner_radius=8,
+            state="disabled",
         )
         self.sec_report_box.pack(fill="both", expand=True, padx=12, pady=(2, 10))
 
@@ -1930,11 +1952,14 @@ class KeyForgeApp(ctk.CTk):
             text_color=TEXT_SECONDARY,
             font=self.fonts["mono_small"],
             corner_radius=8,
+            state="disabled",
         )
         self.console_box.pack(fill="both", expand=True, padx=2, pady=(2, 4))
 
     def _clear_console_log(self) -> None:
+        self.console_box.configure(state="normal")
         self.console_box.delete("1.0", "end")
+        self.console_box.configure(state="disabled")
         self._console_line_count = 0
 
     # -------------------------------------------------------------------------
@@ -1966,6 +1991,8 @@ class KeyForgeApp(ctk.CTk):
                     self.repeat_val_entry.delete(0, "end")
                     self.repeat_val_entry.insert(0, raw_val)
                     self.sync_ui_settings_to_profile()
+        elif selected_mode == "Simple" and self.studio_frame.winfo_manager():
+            self.sync_ui_settings_to_profile()
 
         self.app_config.ui_mode = "simple" if selected_mode == "Simple" else "studio"
         self._apply_ui_mode_layout()
@@ -2358,7 +2385,15 @@ class KeyForgeApp(ctk.CTk):
             return self._on_main_capture_keypress(event)
         if not self._can_handle_step_shortcut(event) or not self.profile.actions:
             return None
-        idx = 0 if self._selected_step_index is None else max(0, self._selected_step_index - 1)
+        has_filter = bool(self._filter_query or self._step_type_filter != "all")
+        nav_indices = self._visible_step_indices if has_filter else list(range(len(self.profile.actions)))
+        if not nav_indices:
+            return None
+        if self._selected_step_index in nav_indices:
+            pos = nav_indices.index(self._selected_step_index)
+            idx = nav_indices[max(0, pos - 1)]
+        else:
+            idx = nav_indices[-1]
         self.select_step(idx)
         return "break"
 
@@ -2367,8 +2402,15 @@ class KeyForgeApp(ctk.CTk):
             return self._on_main_capture_keypress(event)
         if not self._can_handle_step_shortcut(event) or not self.profile.actions:
             return None
-        max_idx = len(self.profile.actions) - 1
-        idx = 0 if self._selected_step_index is None else min(max_idx, self._selected_step_index + 1)
+        has_filter = bool(self._filter_query or self._step_type_filter != "all")
+        nav_indices = self._visible_step_indices if has_filter else list(range(len(self.profile.actions)))
+        if not nav_indices:
+            return None
+        if self._selected_step_index in nav_indices:
+            pos = nav_indices.index(self._selected_step_index)
+            idx = nav_indices[min(len(nav_indices) - 1, pos + 1)]
+        else:
+            idx = nav_indices[0]
         self.select_step(idx)
         return "break"
 
@@ -2397,33 +2439,48 @@ class KeyForgeApp(ctk.CTk):
                             frame.configure(border_color=new_border)
         return self._selected_step_index
 
-    def delete_selected_step(self) -> bool:
+    def _selected_step_is_actionable(self) -> bool:
         if self._selected_step_index is None or not (0 <= self._selected_step_index < len(self.profile.actions)):
+            return False
+        if self._filter_query or self._step_type_filter != "all":
+            return self._selected_step_index in self._visible_step_indices
+        return True
+
+    def delete_selected_step(self) -> bool:
+        if not self._selected_step_is_actionable() or self._selected_step_index is None:
             return False
         self.delete_step(self._selected_step_index)
         return True
 
     def duplicate_selected_step(self) -> bool:
-        if self._selected_step_index is None or not (0 <= self._selected_step_index < len(self.profile.actions)):
+        if not self._selected_step_is_actionable() or self._selected_step_index is None:
             return False
         self.duplicate_step(self._selected_step_index)
         return True
 
     def toggle_selected_step_enabled(self) -> bool:
-        if self._selected_step_index is None or not (0 <= self._selected_step_index < len(self.profile.actions)):
+        if not self._selected_step_is_actionable() or self._selected_step_index is None:
             return False
         act = self.profile.actions[self._selected_step_index]
         self._on_toggle_step_enabled(act, not act.enabled)
         return True
 
     def move_selected_step_up(self) -> bool:
-        if self._selected_step_index is None or self._selected_step_index <= 0:
+        if (
+            not self._selected_step_is_actionable()
+            or self._selected_step_index is None
+            or self._selected_step_index <= 0
+        ):
             return False
         self.move_step_up(self._selected_step_index)
         return True
 
     def move_selected_step_down(self) -> bool:
-        if self._selected_step_index is None or self._selected_step_index >= len(self.profile.actions) - 1:
+        if (
+            not self._selected_step_is_actionable()
+            or self._selected_step_index is None
+            or self._selected_step_index >= len(self.profile.actions) - 1
+        ):
             return False
         self.move_step_down(self._selected_step_index)
         return True
@@ -2543,6 +2600,13 @@ class KeyForgeApp(ctk.CTk):
             )
         self.refresh_sequence_view()
 
+    def _reset_step_filters(self) -> None:
+        self._filter_query = ""
+        if hasattr(self, "filter_entry") and self.filter_entry.get():
+            self.filter_entry.delete(0, "end")
+        if self._step_type_filter != "all":
+            self._set_step_type_filter("all")
+
     @staticmethod
     def _step_headline(act: MacroAction) -> str:
         if act.action_type == ActionType.KEY_PRESS:
@@ -2597,7 +2661,7 @@ class KeyForgeApp(ctk.CTk):
                 detail = "Exact delay"
         elif act.action_type == ActionType.MOUSE_CLICK:
             target = f"Fixed ({act.x}, {act.y})" if act.x is not None else "At cursor"
-            detail = f"{target} • {act.hold_ms}ms hold"
+            detail = target if (act.label and act.hold_ms == 25) else f"{target} • {act.hold_ms}ms hold"
         elif act.action_type == ActionType.MOUSE_MOVE:
             detail = f"{act.move_mode.value.capitalize()} coordinates"
         elif act.action_type == ActionType.MOUSE_SCROLL:
@@ -2608,7 +2672,7 @@ class KeyForgeApp(ctk.CTk):
         else:
             detail = ""
         text = f"{act.label} • {detail}" if act.label and detail else (act.label or detail)
-        return f"{text[:45]}…" if len(text) > 46 else text
+        return f"{text[:59]}…" if len(text) > 60 else text
 
     @staticmethod
     def _step_metric_pill(act: MacroAction) -> str:
@@ -2871,6 +2935,8 @@ class KeyForgeApp(ctk.CTk):
             self._selected_step_index = None
 
         self._step_row_frames.clear()
+        self._step_slots_by_id.clear()
+        self._visible_step_indices = [idx for idx, _act in visible]
         if not visible:
             for slot in self._step_row_pool:
                 if slot["row"].winfo_manager():
@@ -2919,6 +2985,7 @@ class KeyForgeApp(ctk.CTk):
 
             row = slot["row"]
             self._step_row_frames[act.id] = row
+            self._step_slots_by_id[act.id] = slot
 
             is_active = act.id == self._active_step_id
             is_selected = idx == self._selected_step_index
@@ -3060,12 +3127,17 @@ class KeyForgeApp(ctk.CTk):
         if not (0 <= index < len(self.profile.actions)):
             return
         current = self.profile.actions[index]
+        target_id = current.id
 
         def _save_edited(updated: MacroAction) -> None:
+            target_idx = next((i for i, act in enumerate(self.profile.actions) if act.id == target_id), None)
+            if target_idx is None:
+                self.show_toast("Edited step was removed before saving.", level="warning")
+                return
             self._record_undo_snapshot()
-            self.profile.actions[index] = updated
+            self.profile.actions[target_idx] = updated
             self._on_sequence_mutated()
-            self._log_event(f"Updated step #{index + 1}: {updated.describe()}")
+            self._log_event(f"Updated step #{target_idx + 1}: {updated.describe()}")
 
         StepEditorDialog(self, initial_action=current, on_save=_save_edited)
 
@@ -3168,8 +3240,8 @@ class KeyForgeApp(ctk.CTk):
             self._update_studio_repeat_val_visibility(mode)
             self.profile.repeat_mode = mode
 
-            # Read repeat value from Simple Mode entry if Simple Mode is currently active and focused/visible
-            use_simple_entry = self.ui_mode_var.get() == "Simple" and mode != RepeatMode.INFINITE
+            # Read repeat value from Simple Mode entry only when Simple Mode is actively displayed
+            use_simple_entry = bool(self.simple_frame.winfo_manager()) and mode != RepeatMode.INFINITE
             raw_val = (
                 self.simple_repeat_val_entry.get().strip() if use_simple_entry else self.repeat_val_entry.get().strip()
             )
@@ -3324,16 +3396,17 @@ class KeyForgeApp(ctk.CTk):
             self.dry_run_backend.clear()
             self.executor.backend = self.dry_run_backend
         else:
-            self.executor.backend = self.win32_backend
-            if not IS_WINDOWS:
-                self.show_toast(
-                    "Non-Windows OS: native SendInput is Windows-only (use Dry-Run Sim to preview steps).",
-                    level="warning",
-                )
+            self.executor.backend = self.os_backend
+            caps = get_platform_capabilities(self.os_backend)
+            self._platform_caps = caps
+            if not caps.can_inject and caps.notice:
+                self.show_toast(caps.notice, level="warning", duration_ms=8000)
+                self._log_event(f"[{caps.backend_name}] {caps.notice}")
 
         started = self.executor.start(self.profile)
         if started:
-            mode_label = "DRY-RUN SIMULATION" if use_dry_run else "LIVE OS"
+            self.hotkey_manager.set_active_mode(True)
+            mode_label = "DRY-RUN SIMULATION" if use_dry_run else self._platform_caps.backend_name.upper()
             self._log_event(
                 f"Started macro [{self.profile.name}] in {mode_label} mode ({self.profile.repeat_mode.value})."
             )
@@ -3346,6 +3419,7 @@ class KeyForgeApp(ctk.CTk):
             self.recorder.stop()
             self._refresh_hotkey_displays()
         self.executor.panic_abort()
+        self.hotkey_manager.set_active_mode(False)
         self._update_run_button_ui()
         self._log_event("PANIC STOP TRIGGERED! Execution aborted and all held keys/buttons released.")
         self.show_toast("Panic Stop triggered — all inputs released.", level="warning")
@@ -3359,6 +3433,7 @@ class KeyForgeApp(ctk.CTk):
 
         if self.recorder.is_recording:
             recorded = self.recorder.stop()
+            self.hotkey_manager.set_active_mode(self.executor.is_running)
             self.rec_toggle_btn.configure(
                 text=f"● Record Live Inputs ({self.profile.record_hotkey})",
                 fg_color=BTN_DANGER_SUBTLE,
@@ -3375,8 +3450,14 @@ class KeyForgeApp(ctk.CTk):
             else:
                 self._log_event("Live Recording stopped (0 inputs captured).")
         else:
-            if not IS_WINDOWS:
-                self.show_toast("Live OS input recording requires Windows.", level="warning")
+            caps = get_platform_capabilities(self.os_backend)
+            self._platform_caps = caps
+            if not caps.can_poll_keys and caps.notice:
+                self.show_toast(caps.notice, level="warning", duration_ms=8000)
+                self._log_event(f"[{caps.backend_name}] {caps.notice}")
+            elif caps.requires_permission and caps.notice:
+                self.show_toast(caps.notice, level="warning", duration_ms=8000)
+                self._log_event(f"[{caps.backend_name}] {caps.notice}")
             self.recorder.config.record_delays = self.rec_delays_var.get()
             self.recorder.config.merge_key_taps = self.rec_merge_var.get()
             self.recorder.config.capture_click_coordinates = self.rec_coords_var.get()
@@ -3386,6 +3467,7 @@ class KeyForgeApp(ctk.CTk):
                 self.profile.start_stop_hotkey,
             )
             self.recorder.start(enable_os_poller=True)
+            self.hotkey_manager.set_active_mode(True)
             self.rec_toggle_btn.configure(
                 text=f"⏹ Stop Recording ({self.profile.record_hotkey})",
                 fg_color=ACCENT_WARNING,
@@ -3474,6 +3556,7 @@ class KeyForgeApp(ctk.CTk):
         preset = self.presets.get(preset_name)
         if preset is None:
             return
+        self._reset_step_filters()
         self._record_undo_snapshot()
         self.profile = MacroProfile.from_payload_dict(preset.to_payload_dict())
         self.sync_profile_settings_to_ui()
@@ -3484,6 +3567,7 @@ class KeyForgeApp(ctk.CTk):
     def action_new_profile(self) -> None:
         if self.executor.is_running:
             self.executor.stop()
+        self._reset_step_filters()
         self._record_undo_snapshot()
         self.profile = MacroProfile(
             name="Custom Macro Profile",
@@ -3510,6 +3594,7 @@ class KeyForgeApp(ctk.CTk):
         if self.executor.is_running:
             self.executor.stop()
         loaded_profile, sig_verified = load_profile_secure(path, require_signature=False)
+        self._reset_step_filters()
         self._record_undo_snapshot()
         self.profile = loaded_profile
         self.app_config.last_profile_path = str(Path(path))
@@ -3538,7 +3623,7 @@ class KeyForgeApp(ctk.CTk):
     def action_open_profile_dialog(self) -> None:
         file_path = filedialog.askopenfilename(
             title="Open KeyForge Macro Profile",
-            filetypes=[("KeyForge Macro JSON", "*.json *.kfmacro")],
+            filetypes=[("KeyForge Macro", ("*.json", "*.kfmacro")), ("All JSON", "*.json")],
         )
         if file_path:
             try:
@@ -3571,6 +3656,7 @@ class KeyForgeApp(ctk.CTk):
             self.sec_budget_lbl.configure(
                 text=f"Complexity Budget: {nodes} / 5,000 steps | {ops} / 100,000 expanded ops"
             )
+            self.sec_report_box.configure(state="normal")
             self.sec_report_box.delete("1.0", "end")
             if report.is_clean:
                 self.sec_report_box.insert(
@@ -3589,6 +3675,7 @@ class KeyForgeApp(ctk.CTk):
                         f"  Detail: {f.description}\n"
                         f"  Fix:    {f.remediation}\n\n",
                     )
+            self.sec_report_box.configure(state="disabled")
             self._security_tab_dirty = False
 
     def run_security_audit(self) -> AuditReport:
@@ -3770,6 +3857,10 @@ class KeyForgeApp(ctk.CTk):
             self.recorder.stop()
         if self.executor.is_running:
             self.executor.panic_abort()
+        close_backend = getattr(self.os_backend, "close", None)
+        if callable(close_backend):
+            with contextlib.suppress(Exception):
+                close_backend()
 
     # -------------------------------------------------------------------------
     # Compact Floating Mini-HUD Mode
@@ -3881,7 +3972,12 @@ class KeyForgeApp(ctk.CTk):
             return
         with contextlib.suppress(Exception):
             if self.winfo_exists():
-                self._hotkey_poll_after_id = self.after(75, self._poll_hotkey_queue)
+                is_active = self.executor.is_running or self.recorder.is_recording
+                is_minimized = False
+                with contextlib.suppress(Exception):
+                    is_minimized = self.state() == "iconic"
+                delay_ms = 50 if is_active else (300 if is_minimized else 150)
+                self._hotkey_poll_after_id = self.after(delay_ms, self._poll_hotkey_queue)
 
     def _poll_hotkey_queue(self) -> None:
         self._hotkey_poll_after_id = None
@@ -3996,6 +4092,7 @@ class KeyForgeApp(ctk.CTk):
         self._drain_startup_update_queue()
         telem: ExecutionTelemetry = self.executor.telemetry
         is_running = self.executor.is_running or telem.state in (ExecutorState.RUNNING, ExecutorState.STOPPING)
+        self.hotkey_manager.set_active_mode(is_running or self.recorder.is_recording)
         self._update_run_button_ui()
 
         if telem.state == ExecutorState.ERROR and telem.last_error and telem.last_error != self._last_telem_error:
@@ -4025,13 +4122,20 @@ class KeyForgeApp(ctk.CTk):
             self.simple_status_lbl.configure(text=simple_status_text, text_color=state_color)
 
         is_dry = bool(self.dry_run_var.get())
-        mode_text = "Dry-Run" if is_dry else "Live Input"
-        if self._tick_cache.get("mode_text") != mode_text:
-            self._tick_cache["mode_text"] = mode_text
+        if is_dry:
+            mode_badge = ("Dry-Run", BADGE_WARN_BG, BADGE_WARN_FG)
+        elif not self._platform_caps.can_inject:
+            label = "Access Needed" if self._platform_caps.requires_permission else "Preview Only"
+            mode_badge = (label, BADGE_WARN_BG, BADGE_WARN_FG)
+        else:
+            mode_badge = ("Live Input", BG_ELEVATED, TEXT_SECONDARY)
+
+        if self._tick_cache.get("mode_badge") != mode_badge:
+            self._tick_cache["mode_badge"] = mode_badge
             self.mode_sub_lbl.configure(
-                text=mode_text,
-                fg_color=BADGE_WARN_BG if is_dry else BG_ELEVATED,
-                text_color=BADGE_WARN_FG if is_dry else TEXT_SECONDARY,
+                text=mode_badge[0],
+                fg_color=mode_badge[1],
+                text_color=mode_badge[2],
             )
 
         cycles_text = f"{telem.cycles_completed} Cycles | {telem.actions_executed} Actions"
@@ -4075,8 +4179,8 @@ class KeyForgeApp(ctk.CTk):
                 has_focus = is_running or (self.focus_displayof() is not None)
 
         if has_focus:
-            if IS_WINDOWS:
-                cx, cy = self.win32_backend.get_cursor_pos()
+            if self._platform_caps.can_poll_cursor:
+                cx, cy = self.os_backend.get_cursor_pos()
             else:
                 cx, cy = self.winfo_pointerx(), self.winfo_pointery()
             cursor_text = f"XY: ({cx}, {cy})"
@@ -4088,10 +4192,16 @@ class KeyForgeApp(ctk.CTk):
         if telem.current_action_id != self._active_step_id:
             prev_id = self._active_step_id
             self._active_step_id = telem.current_action_id
-            if prev_id and prev_id in self._step_row_frames:
-                self._step_row_frames[prev_id].configure(fg_color=BG_CARD)
-            if self._active_step_id and self._active_step_id in self._step_row_frames:
-                self._step_row_frames[self._active_step_id].configure(fg_color=BG_CARD_ACTIVE)
+            if prev_id and prev_id in self._step_slots_by_id:
+                prev_slot = self._step_slots_by_id[prev_id]
+                if prev_slot["fg_color"] != BG_CARD:
+                    prev_slot["fg_color"] = BG_CARD
+                    prev_slot["row"].configure(fg_color=BG_CARD)
+            if self._active_step_id and self._active_step_id in self._step_slots_by_id:
+                curr_slot = self._step_slots_by_id[self._active_step_id]
+                if curr_slot["fg_color"] != BG_CARD_ACTIVE:
+                    curr_slot["fg_color"] = BG_CARD_ACTIVE
+                    curr_slot["row"].configure(fg_color=BG_CARD_ACTIVE)
 
         self._sync_mini_hud()
         return is_running
@@ -4099,11 +4209,13 @@ class KeyForgeApp(ctk.CTk):
     def _log_event(self, message: str) -> None:
         ts = datetime.now().strftime("%H:%M:%S")
         line = f"[{ts}] {message}\n"
+        self.console_box.configure(state="normal")
         self.console_box.insert("end", line)
         self._console_line_count += 1
         if self._console_line_count > MAX_CONSOLE_LINES:
             self.console_box.delete("1.0", "26.0")
             self._console_line_count = max(0, self._console_line_count - 25)
+        self.console_box.configure(state="disabled")
         if self.ui_mode_var.get() == "Studio" and self.inspector_tabs.get() == "Console":
             self.console_box.see("end")
         if hasattr(self, "footer_status_lbl"):
@@ -4153,6 +4265,10 @@ class KeyForgeApp(ctk.CTk):
             self.recorder.stop()
         if self.executor.is_running:
             self.executor.panic_abort()
+        close_backend = getattr(self.os_backend, "close", None)
+        if callable(close_backend):
+            with contextlib.suppress(Exception):
+                close_backend()
         cancel_all_tcl_after_timers(self)
         with contextlib.suppress(Exception):
             self.destroy()

@@ -13,7 +13,7 @@ from pathlib import Path
 from keyforge import __version__
 from keyforge.engine.backend import DryRunBackend
 from keyforge.engine.executor import MacroExecutor
-from keyforge.engine.win32_input import Win32InputBackend
+from keyforge.engine.platform_input import create_os_input_backend
 from keyforge.installer import install_keyforge, is_running_as_setup_installer, uninstall_keyforge
 from keyforge.models.dsl import format_actions_to_dsl, parse_quick_expression
 from keyforge.models.profile import MacroProfile, RepeatMode, create_default_profile
@@ -59,7 +59,8 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="keyforge",
         description=(
-            "KeyForge — A modern, secure, FOSS visual keyboard & mouse macro builder and auto-clicker for Windows."
+            "KeyForge — A modern, secure, FOSS visual keyboard & mouse macro builder and auto-clicker "
+            "for Windows, macOS, and Linux."
         ),
     )
     parser.add_argument(
@@ -214,12 +215,17 @@ def main(argv: Sequence[str] | None = None) -> int:
             if args.audit:
                 return 1 if report.has_critical else 0
 
-            backend = DryRunBackend() if args.dry_run else Win32InputBackend()
+            backend = DryRunBackend() if args.dry_run else create_os_input_backend()
             time_scale = 0.01 if args.dry_run else 1.0
             executor = MacroExecutor(backend=backend, time_scale=time_scale)
 
-            print(f"Executing: {format_actions_to_dsl(profile.actions)}")
-            telem = executor.run_blocking(profile)
+            try:
+                print(f"Executing: {format_actions_to_dsl(profile.actions)}")
+                telem = executor.run_blocking(profile)
+            finally:
+                close_fn = getattr(backend, "close", None)
+                if callable(close_fn):
+                    close_fn()
             print(
                 f"Completed: state={telem.state.value}, cycles={telem.cycles_completed}, "
                 f"actions={telem.actions_executed}, elapsed={telem.elapsed_seconds:.3f}s"

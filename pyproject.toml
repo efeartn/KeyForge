@@ -4,21 +4,22 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "keyforge"
-version = "1.5.0"
-description = "A modern, secure, FOSS visual keyboard & macro sequence studio and input recorder for Windows."
+version = "1.6.0"
+description = "A modern, secure, FOSS visual keyboard & macro sequence studio and input recorder for Windows, macOS, and Linux."
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "GPL-3.0-or-later" }
 authors = [
     { name = "Efe Artun" }
 ]
-keywords = ["macro", "keyboard", "automation", "recorder", "hotkey", "windows", "foss"]
+keywords = ["macro", "keyboard", "automation", "recorder", "hotkey", "windows", "macos", "linux", "foss"]
 classifiers = [
     "Development Status :: 5 - Production/Stable",
-    "Environment :: Win32 (MS Windows)",
     "Intended Audience :: End Users/Desktop",
     "License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)",
+    "Operating System :: MacOS",
     "Operating System :: Microsoft :: Windows",
+    "Operating System :: POSIX :: Linux",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",

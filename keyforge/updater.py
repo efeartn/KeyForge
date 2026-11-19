@@ -777,6 +777,21 @@ def apply_update_and_restart(
         staged_path.unlink(missing_ok=True)
         raise
 
+    if sys.platform == "darwin":
+        xattr_exe = shutil.which("xattr")
+        if xattr_exe:
+            with contextlib.suppress(Exception):
+                subprocess.run(  # noqa: S603
+                    [xattr_exe, "-d", "com.apple.quarantine", str(target_exe)],
+                    capture_output=True,
+                    timeout=5,
+                    check=False,
+                )
+
+    with contextlib.suppress(OSError):
+        if new_bin_path.resolve() != target_exe.resolve():
+            new_bin_path.unlink(missing_ok=True)
+
     subprocess.Popen(  # noqa: S603
         relaunch_cmd,
         start_new_session=True,

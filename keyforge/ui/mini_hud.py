@@ -27,6 +27,7 @@ from keyforge.ui.theme import (
     TEXT_SECONDARY,
     apply_window_icon,
     get_fonts,
+    get_geometry_coord_scale,
     get_logical_workarea,
 )
 
@@ -58,9 +59,10 @@ class MiniHudWindow(ctk.CTkToplevel):
 
     def _position_hud(self) -> None:
         work_left, work_top, work_w, _work_h, scale = get_logical_workarea(self._master_app)
+        coord_scale = get_geometry_coord_scale(scale)
         hud_w, hud_h = 410, 64
-        x_px = work_left + max(16, int((work_w - hud_w - 24) * scale))
-        y_px = work_top + max(16, int(20 * scale))
+        x_px = work_left + max(16, int((work_w - hud_w - 24) * coord_scale))
+        y_px = work_top + max(16, int(20 * coord_scale))
         self.geometry(f"{hud_w}x{hud_h}+{x_px}+{y_px}")
 
     def _build_ui(self) -> None:

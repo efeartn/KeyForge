@@ -14,7 +14,7 @@ Free, Open-Source (`GPL-3.0`), Cybersecurity-Hardened, and Native for Windows, m
 [![Security: SHA-256 Signed + Static Auditor](https://img.shields.io/badge/Security-SHA--256%20Verified%20%2B%20Static%20Auditor-10B981)](SECURITY.md)
 [![License: GPL-3.0](https://img.shields.io/badge/License-GPL--3.0-8B5CF6.svg)](LICENSE)
 
-[**Download v1.5.0**](#download-standalone-executables) • [**Release Notes**](RELEASE_NOTES.md) • [**Visual Tour**](#visual-tour) • [**Setup Installer & Updater**](#windows-setup-installer--auto-updater) • [**Sequence DSL**](#sequence-dsl-reference) • [**Cybersecurity**](#cybersecurity--safety-engineering) • [**CLI & Source**](#installation--quick-start)
+[**Download v1.6.0**](#download-standalone-executables) • [**Release Notes**](RELEASE_NOTES.md) • [**Visual Tour**](#visual-tour) • [**Cross-Platform Engine**](#cross-platform-support-windows--macos--linux) • [**Setup Installer & Updater**](#setup-installer--auto-updater) • [**Sequence DSL**](#sequence-dsl-reference) • [**Cybersecurity**](#cybersecurity--safety-engineering) • [**CLI & Source**](#installation--quick-start)
 
 </div>
 
@@ -25,7 +25,7 @@ Free, Open-Source (`GPL-3.0`), Cybersecurity-Hardened, and Native for Windows, m
 <div align="center">
   <img src="docs/screenshots/studio_mode.png" alt="KeyForge Studio Mode Obsidian and Mint Emerald Desktop Interface" width="100%" />
   <br />
-  <sub><b>Studio Mode (v1.5.0)</b> — Decluttered top utility header, <b>4-Card Hero Control Strip</b> (Profile, Engine Telemetry, Hotkeys &amp; Dry-Run, Delay &amp; Start CTA), <b>All Steps / Keys / Waits / Mouse</b> filter pills with <code>/</code> quick search, aligned timeline cards, keyboard shortcuts (<code>Del</code> / <code>Ctrl+D</code> / <code>Space</code> / <code>Alt+↑/↓</code>), and compact <b>Mini HUD</b>.</sub>
+  <sub><b>Studio Mode (v1.6.0)</b> — Decluttered top utility header, <b>4-Card Hero Control Strip</b> (Profile, Engine Telemetry, Hotkeys &amp; Dry-Run, Delay &amp; Start CTA), <b>All Steps / Keys / Waits / Mouse</b> filter pills with <code>/</code> quick search, crisp non-truncated step cards, keyboard shortcuts (<code>Del</code> / <code>Ctrl+D</code> / <code>Space</code> / <code>Alt+↑/↓</code>), and compact <b>Mini HUD</b>.</sub>
 </div>
 
 ---
@@ -44,10 +44,10 @@ KeyForge adapts smoothly from quick keyboard automation to full multi-step seque
     <td width="42%" valign="top">
       <h3>Everyday Keyboard Automation</h3>
       <ul>
-        <li><b>Two Synchronized Modes:</b> Toggle cleanly between <b>Simple</b> (Key Repeater &amp; Quick Sequence) and <b>Studio</b> (4-card hero strip + timeline) with live bidirectional profile sync.</li>
-        <li><b>Click-to-Bind Key Capture &amp; Presets:</b> Click <b>Bind Key</b> to capture any physical key or modifier combo (e.g. <code>Ctrl+Shift+F</code>), use speed presets (<code>25ms–500ms</code>), or save custom profiles via <b>+ Save Preset</b>.</li>
-        <li><b>Fast Step Filtering &amp; Shortcuts:</b> Slice steps by <b>Keys</b>, <b>Waits</b>, or <b>Mouse</b>, press <code>/</code> to filter, and manage timeline rows via <code>Del</code>, <code>Ctrl+D</code>, <code>Space</code>, and <code>Alt+↑/↓</code>.</li>
-        <li><b>Low-Spec &amp; Low-RAM Optimized:</b> Pure <code>CustomTkinter</code> + <code>Pillow</code> UI with zero Chromium/WebView subprocess bloat, a warm 64-slot pooled timeline renderer, and dirty-checked telemetry (~44.6 MB Private RAM idle on Windows).</li>
+        <li><b>Two Synchronized Modes:</b> Toggle cleanly between <b>Simple</b> (Key Repeater &amp; Quick Sequence) and <b>Studio</b> (4-card hero strip + timeline) with live bidirectional profile, delay, and repeat-count sync.</li>
+        <li><b>Click-to-Bind Key Capture &amp; Presets:</b> Click <b>Bind Key</b> to capture any physical key or modifier combo (e.g. <code>Ctrl+Shift+F</code> or <code>Cmd+C</code> on macOS), use speed presets (<code>25ms–500ms</code>), or save custom profiles via <b>+ Save Preset</b>.</li>
+        <li><b>Fast Step Filtering &amp; Shortcuts:</b> Slice steps by <b>Keys</b>, <b>Waits</b>, or <b>Mouse</b>, press <code>/</code> to filter, and manage visible rows safely via <code>Del</code>, <code>Ctrl+D</code> / <code>⌘D</code>, <code>Space</code>, and <code>Alt+↑/↓</code>.</li>
+        <li><b>Low-Spec &amp; Low-RAM Optimized:</b> Pure <code>CustomTkinter</code> + <code>Pillow</code> UI with zero Chromium/WebView subprocess bloat, a warm 64-slot pooled timeline, 64px cached icons, adaptive idle polling, and dirty-checked telemetry (~42.5 MB Private RAM / ~0.78% CPU idle on Windows).</li>
       </ul>
     </td>
   </tr>
@@ -63,14 +63,14 @@ KeyForge adapts smoothly from quick keyboard automation to full multi-step seque
       <br /><br />
       <p align="left">
         <b>Compact Always-on-Top Mini-HUD</b><br />
-        Click <b>Mini HUD</b> in the header bar to collapse KeyForge into a slim floating control pill that stays above games or desktop workflows with live cycle telemetry, Start/Stop (<code>F6</code>), Panic (<code>F12</code>), and one-click <b>Expand</b>.
+        Click <b>Mini HUD</b> in the header bar to collapse KeyForge into a slim floating control pill that stays above games or desktop workflows on Windows, macOS Retina, and Linux with live cycle telemetry, Start/Stop (<code>F6</code>), Panic (<code>F12</code>), and one-click <b>Expand</b>.
       </p>
     </td>
     <td width="50%" valign="top" align="center">
-      <img src="docs/screenshots/setup_installer.png" alt="KeyForge v1.5.0 Setup Installer Wizard with Browse Button" width="90%" />
+      <img src="docs/screenshots/setup_installer.png" alt="KeyForge v1.6.0 Setup Installer Wizard with Browse Button" width="90%" />
       <p align="left">
-        <b>Windows Setup Installer &amp; Uninstaller</b><br />
-        Run <code>KeyForge-Setup-Windows-x64.exe</code> to choose a destination with <b>Browse...</b>, install per-user without admin UAC prompts, create Desktop &amp; Start Menu shortcuts, and preserve user configs &amp; macros on uninstall unless opted out.
+        <b>Cross-Platform Setup Installer &amp; Uninstaller</b><br />
+        Install per-user without admin elevation (<code>%LOCALAPPDATA%\Programs\KeyForge</code> on Windows, <code>~/Applications/KeyForge</code> on macOS, <code>~/.local/share/KeyForge</code> on Linux) with native shortcuts / <code>.desktop</code> launchers while preserving user configs &amp; macros by default.
       </p>
     </td>
   </tr>
@@ -139,11 +139,24 @@ sha256sum -c KeyForge-Linux-x64.sha256.txt && chmod +x KeyForge-Linux-x64
 
 ---
 
-## Windows Setup Installer & Auto-Updater
+## Cross-Platform Support (Windows · macOS · Linux)
+
+KeyForge injects live keyboard/mouse events, polls global hotkeys, and captures live input natively on every desktop OS using built-in `ctypes` bindings — requiring **zero external input-hook dependencies**:
+
+| Platform | Native Input & Hotkey Engine | Permissions & Notes |
+| :--- | :--- | :--- |
+| **Windows 10 / 11** | `Win32InputBackend` (`user32.SendInput` 64-bit, `GetAsyncKeyState`) | Works immediately out of the box with `0x4B465247` self-filter signature |
+| **macOS (Apple Silicon / Intel)** | `MacOSInputBackend` (`CoreGraphics` `CGEventPost`, non-variadic scroll, `CGEventSourceKeyState`) | Grant **Accessibility** permission in *System Settings → Privacy & Security → Accessibility* for live injection & global hotkeys; supports `Cmd` / `Option` aliases and `⌘` shortcuts |
+| **Linux (`x86_64` / `arm64`)** | `LinuxX11InputBackend` (`libX11` + `libXtst`, thread-safe dedicated `Display*`, `XQueryKeymap`) | Works on X11 and XWayland windows (`libxtst6` required; pure Wayland compositors without XWayland fall back safely to Dry-Run Simulation with an actionable banner) |
+
+---
+
+## Setup Installer & Auto-Updater
 
 ### Safe Setup & Uninstaller (Preserves User Data by Default)
-- **Zero-Elevation Per-User Install**: Installs to `%LOCALAPPDATA%\Programs\KeyForge\KeyForge.exe`, creates optional Desktop & Start Menu shortcuts, and registers **KeyForge** in Windows Apps & Features (`HKCU\...\Uninstall\KeyForge`).
-- **Uninstall Without Data Loss**: Running Uninstall leaves your `%APPDATA%\KeyForge` configuration, custom presets, and saved active macro profile untouched by default unless you explicitly opt in to delete them (`--purge-data`).
+- **Zero-Elevation Per-User Install**: Installs cleanly into your user folder (`%LOCALAPPDATA%\Programs\KeyForge\KeyForge.exe` on Windows, `~/Applications/KeyForge/KeyForge` on macOS, `~/.local/share/KeyForge/KeyForge` on Linux) with **Browse...** customization.
+- **Native Shortcuts & Registration**: Creates optional Desktop shortcuts and Windows Start Menu / Uninstall registry entries or Linux `.desktop` Application Menu launchers, and automatically sets `0755` executable permissions on POSIX.
+- **Uninstall Without Data Loss**: Running Uninstall removes binaries and shortcuts while leaving your configuration, custom presets, and active macro profile intact by default unless `--purge-data` is selected.
 - **Silent CLI Support**: Both Setup and Uninstall support headless flags (`--install --silent` and `--uninstall --silent [--purge-data]`).
 
 ### Auto-Updater & Persistent Configuration
@@ -216,7 +229,7 @@ KeyForge is built with defensive local and supply-chain safeguards documented in
 | **`KF-SEC-002`** | `WARNING` | Detects unbalanced `KeyDown` / `MouseDown` actions without matching release steps |
 | **`KF-SEC-003`** | `CRITICAL` | Flags suspicious shell/system shortcuts (`Win+R`, `Win+X`, `Alt+F4`), including split `KeyDown RWin -> Press R` sequences |
 | **`KF-SEC-004`** | `WARNING` | Flags extreme mouse click rates (`> 100 CPS`) |
-| **`KF-SEC-005`** | `WARNING` | Flags empty sequences or profiles where every step is disabled |
+| **`KF-SEC-005`** | `INFO` | Alerts when a step injects a key also bound as a KeyForge control hotkey (`0x4B465247` self-filter active) |
 
 ---
 
@@ -232,8 +245,11 @@ flowchart LR
     HK["GlobalHotkeyManager<br/>(F6 Run / F7 Rec / F12 Panic)"] --> EXEC
     HK --> REC
     EXEC --> SAN["EmergencyInputSanitizer<br/>(Auto-Release Ledger)"]
-    SAN --> WIN32["Win32InputBackend<br/>(user32.SendInput 64-bit)"]
-    SAN --> DRY["DryRunBackend<br/>(Cross-Platform Simulator)"]
+    SAN --> PLAT["Cross-Platform Backend Router<br/>(keyforge/engine/platform_input.py)"]
+    PLAT --> WIN32["Win32 SendInput<br/>(Windows)"]
+    PLAT --> MAC["CoreGraphics CGEvent<br/>(macOS)"]
+    PLAT --> X11["X11 / XTest<br/>(Linux)"]
+    SAN --> DRY["DryRunBackend<br/>(Offline Simulator)"]
 ```
 
 ```text
@@ -243,15 +259,16 @@ KeyForge/
 ├── keyforge/
 │   ├── assets/                   # Bundled App Icon Assets (icon.png, icon.ico)
 │   ├── engine/
-│   │   ├── backend.py            # InputBackend ABC, DryRunBackend & EmergencyInputSanitizer
-│   │   ├── executor.py           # Interruptible MacroExecutor & Live Telemetry
-│   │   ├── hotkeys.py            # Global Hotkey Polling Thread (F6 / F7 / F12)
-│   │   ├── recorder.py           # Live Input Recorder with Tap Coalescing & Self-Filter
-│   │   └── win32_input.py        # 64-bit Win32 SendInput + Cross-Platform Fallback
+│   │   ├── backend.py            # InputBackend Protocol & DryRunBackend Simulator
+│   │   ├── executor.py           # Interruptible MacroExecutor, Sanitizer & Telemetry
+│   │   ├── hotkeys.py            # Adaptive Cross-Platform Global Hotkey Polling Thread
+│   │   ├── platform_input.py     # Native macOS CoreGraphics, Linux X11/XTest & Router
+│   │   ├── recorder.py           # Live Input Recorder with Tap Coalescing & Combo Filter
+│   │   └── win32_input.py        # 64-bit Win32 SendInput ctypes Backend
 │   ├── models/
 │   │   ├── action.py             # MacroAction Dataclass, ActionType & Validation
 │   │   ├── dsl.py                # Sequence DSL Parser & Formatter
-│   │   ├── keymap.py             # Virtual-Key (VK), Scan-Code & Key Capture Registry
+│   │   ├── keymap.py             # Virtual-Key (VK), Scan-Code, Cmd/Option & Capture Registry
 │   │   └── profile.py            # MacroProfile & Built-In Presets
 │   ├── security/
 │   │   ├── auditor.py            # Static Security & Safety Analyzer (KF-SEC-001..005)
@@ -259,18 +276,18 @@ KeyForge/
 │   │   └── validator.py          # Allowlist Schema, Path & Complexity Budget Validator
 │   ├── ui/
 │   │   ├── app.py                # Dual Simple/Studio Obsidian Desktop GUI & 4-Card Hero
-│   │   ├── installer_dialog.py   # Windows Setup & Uninstaller Wizard with Browse...
+│   │   ├── installer_dialog.py   # Cross-Platform Setup & Uninstaller Wizard with Browse...
 │   │   ├── mini_hud.py           # Always-on-Top Floating Compact Control Pill
 │   │   ├── step_dialog.py        # Modal Step Inspector with Bind Key & Pick XY Capture
-│   │   ├── theme.py              # Obsidian/Emerald Palette, High-DPI & Window Helpers
+│   │   ├── theme.py              # Obsidian/Emerald Palette, HiDPI Scaling & 64px Icon Cache
 │   │   └── update_dialog.py      # SHA-256 Verified GitHub Releases Update Sheet
 │   ├── config.py                 # Crash-Safe Config, Custom Presets & Active Profile Backup
-│   ├── installer.py              # Per-User Installer, Shortcuts & Uninstall Registry Manager
+│   ├── installer.py              # Per-User Installer, Desktop Launchers & Registry Manager
 │   ├── main.py                   # Setup Wizard, CLI & Desktop GUI Entry Point
 │   └── updater.py                # SemVer Client, SHA-256 Verifier & Atomic Hot-Swapper
 ├── RELEASE_NOTES.md              # Latest Release Notes (Published to GitHub Releases)
 ├── scripts/build_exe.py          # Cross-Platform PyInstaller Compiler + SHA-256 Generator
-└── tests/                        # Unit, Security, Updater, Config, Engine, CLI & UI Tests
+└── tests/                        # Unit, Security, Cross-Platform, Updater, CLI & UI Tests
 ```
 
 ---

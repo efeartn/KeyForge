@@ -354,15 +354,39 @@ class UpdateDialog(ctk.CTkToplevel):
             text="Download & Restart",
             width=170,
             height=34,
-            fg_color=CTA_SUCCESS,
-            hover_color=CTA_SUCCESS_HOVER,
-            text_color=CTA_TEXT,
-            text_color_disabled="#1B4D38",
+            fg_color=BG_ELEVATED,
+            hover_color=BG_ELEVATED,
+            border_width=1,
+            border_color=BORDER_SUBTLE,
+            text_color=TEXT_MUTED,
+            text_color_disabled=TEXT_MUTED,
             font=self._fonts["body_bold"],
             state="disabled",
             command=self.start_download_and_install,
         )
         self.install_btn.pack(side="right")
+
+    def _set_install_btn_state(self, enabled: bool, text: str) -> None:
+        if enabled:
+            self.install_btn.configure(
+                state="normal",
+                text=text,
+                fg_color=CTA_SUCCESS,
+                hover_color=CTA_SUCCESS_HOVER,
+                text_color=CTA_TEXT,
+                border_width=0,
+            )
+        else:
+            self.install_btn.configure(
+                state="disabled",
+                text=text,
+                fg_color=BG_ELEVATED,
+                hover_color=BG_ELEVATED,
+                text_color=TEXT_MUTED,
+                text_color_disabled=TEXT_MUTED,
+                border_width=1,
+                border_color=BORDER_SUBTLE,
+            )
 
     def _set_notes_text(self, text: str) -> None:
         self.notes_box.configure(state="normal")
@@ -380,7 +404,7 @@ class UpdateDialog(ctk.CTkToplevel):
             return
         self._is_checking = True
         self.check_again_btn.configure(state="disabled", text="Checking...")
-        self.install_btn.configure(state="disabled")
+        self._set_install_btn_state(False, "Checking...")
         self.status_title_lbl.configure(text="Checking for Updates...", text_color=TEXT_PRIMARY)
         self.meta_lbl.configure(text=f"Querying github.com/{DEFAULT_REPO}...")
         self.sha_pill.configure(text="Checking...", fg_color=BG_ELEVATED, text_color=TEXT_SECONDARY)
@@ -466,9 +490,9 @@ class UpdateDialog(ctk.CTkToplevel):
             )
             self.meta_lbl.configure(text=f"{display_name}  •  {asset_label} ({size_str})")
             if release.download_url:
-                self.install_btn.configure(
-                    state="normal",
-                    text="Update Now" if getattr(sys, "frozen", False) else "Download & Verify",
+                self._set_install_btn_state(
+                    True,
+                    "Update Now" if getattr(sys, "frozen", False) else "Download & Verify",
                 )
                 mode_hint = (
                     "All configs & macros will be preserved automatically."
@@ -477,7 +501,7 @@ class UpdateDialog(ctk.CTkToplevel):
                 )
                 self.progress_lbl.configure(text=mode_hint, text_color=TEXT_SECONDARY)
             else:
-                self.install_btn.configure(state="disabled", text="Manual Download")
+                self._set_install_btn_state(False, "Manual Download")
                 self.progress_lbl.configure(
                     text="No matching executable asset found for this OS. Use Release Page ↗.",
                     text_color=ACCENT_WARNING,
@@ -488,7 +512,7 @@ class UpdateDialog(ctk.CTkToplevel):
                 text_color=TEXT_PRIMARY,
             )
             self.meta_lbl.configure(text=f"Latest release on GitHub: v{release.version}")
-            self.install_btn.configure(state="disabled", text="Up to Date")
+            self._set_install_btn_state(False, "Up to Date")
             self.progress_lbl.configure(text="KeyForge is running the latest version.", text_color=TEXT_SECONDARY)
 
     # ------------------------------------------------------------------
@@ -502,7 +526,7 @@ class UpdateDialog(ctk.CTkToplevel):
         self._is_downloading = True
         self._cancel_requested = False
         self.check_again_btn.configure(state="disabled")
-        self.install_btn.configure(state="disabled", text="Downloading...")
+        self._set_install_btn_state(False, "Downloading...")
         self.secondary_btn.configure(text="Cancel Download")
         self.progress_bar.configure(mode="determinate")
         self.progress_bar.set(0.0)
@@ -573,10 +597,12 @@ class UpdateDialog(ctk.CTkToplevel):
         self.check_again_btn.configure(state="normal")
         self.secondary_btn.configure(text="Close", state="normal")
         if self._release and self._release.is_update_available and self._release.download_url:
-            self.install_btn.configure(
-                state="normal",
-                text="Update Now" if getattr(sys, "frozen", False) else "Download & Verify",
+            self._set_install_btn_state(
+                True,
+                "Update Now" if getattr(sys, "frozen", False) else "Download & Verify",
             )
+        else:
+            self._set_install_btn_state(False, "Unavailable")
         self.progress_bar.configure(progress_color=BG_INPUT)
         self.progress_bar.set(0.0)
         if cancelled:
@@ -596,7 +622,7 @@ class UpdateDialog(ctk.CTkToplevel):
             self.sha_pill.configure(text="SHA-256 Verified ✓", fg_color=BADGE_OK_BG, text_color=BADGE_OK_FG)
 
         if not getattr(sys, "frozen", False):
-            self.install_btn.configure(state="disabled", text="Downloaded")
+            self._set_install_btn_state(False, "Downloaded")
             self.progress_lbl.configure(
                 text=f"Verified binary saved to updates/{downloaded_path.name} (source mode: restart skipped).",
                 text_color=ACCENT_SUCCESS,

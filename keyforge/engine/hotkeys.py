@@ -6,15 +6,17 @@ import contextlib
 import threading
 from collections.abc import Callable
 
-from keyforge.engine.win32_input import get_async_key_state
+from keyforge.engine.platform_input import platform_get_async_key_state, platform_supports_key_polling
 from keyforge.models.keymap import KeyInfo, parse_key_combo
 
 
 class GlobalHotkeyManager:
     """Monitors global key combinations (Start/Stop, Record, Panic Stop) in the background."""
 
-    def __init__(self, poll_interval_s: float = 0.020) -> None:
-        self._poll_interval_s = max(0.005, float(poll_interval_s))
+    def __init__(self, poll_interval_s: float = 0.020, idle_poll_interval_s: float = 0.050) -> None:
+        self._active_poll_interval_s = max(0.005, float(poll_interval_s))
+        self._idle_poll_interval_s = max(self._active_poll_interval_s, float(idle_poll_interval_s))
+        self._is_active_mode = False
         self._lock = threading.RLock()
         self._stop_event = threading.Event()
         self._thread: threading.Thread | None = None
@@ -22,6 +24,15 @@ class GlobalHotkeyManager:
         self._bindings: dict[str, tuple[list[KeyInfo], Callable[[], None]]] = {}
         self._compiled_bindings: tuple[tuple[str, tuple[int, ...], Callable[[], None]], ...] = ()
         self._was_active: dict[str, bool] = {}
+
+    @property
+    def current_poll_interval_s(self) -> float:
+        """Return active (20ms) or idle (50ms) poll interval."""
+        return self._active_poll_interval_s if self._is_active_mode else self._idle_poll_interval_s
+
+    def set_active_mode(self, active: bool) -> None:
+        """Switch between fast active-run polling (20ms) and low-CPU idle polling (50ms)."""
+        self._is_active_mode = bool(active)
 
     def _rebuild_snapshot(self) -> None:
         self._compiled_bindings = tuple(
@@ -51,7 +62,9 @@ class GlobalHotkeyManager:
             self._rebuild_snapshot()
 
     def start(self) -> None:
-        """Start the background Win32 hotkey polling daemon thread."""
+        """Start the background OS hotkey polling daemon thread when supported."""
+        if not platform_supports_key_polling():
+            return
         with self._lock:
             if self._thread is not None and self._thread.is_alive():
                 return
@@ -84,17 +97,17 @@ class GlobalHotkeyManager:
         return True
 
     def _poll_loop(self) -> None:
-        while not self._stop_event.wait(timeout=self._poll_interval_s):
+        while not self._stop_event.wait(timeout=self.current_poll_interval_s):
             snapshot = self._compiled_bindings
             if not snapshot:
                 continue
             callbacks_to_fire: list[Callable[[], None]] | None = None
             for name, vks, callback in snapshot:
                 # Fast exit: check the primary trigger key (last in combo) before any modifiers.
-                all_pressed = get_async_key_state(vks[-1])
+                all_pressed = platform_get_async_key_state(vks[-1])
                 if all_pressed and len(vks) > 1:
                     for mod_vk in vks[:-1]:
-                        if not get_async_key_state(mod_vk):
+                        if not platform_get_async_key_state(mod_vk):
                             all_pressed = False
                             break
 

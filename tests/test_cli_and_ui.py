@@ -199,7 +199,7 @@ def test_version_parity_and_cli_version_flag() -> None:
     pyproject_data = tomllib.loads(pyproject_path.read_text(encoding="utf-8"))
     project_version = pyproject_data["project"]["version"]
 
-    assert __version__ == "1.5.0"
+    assert __version__ == "1.6.0"
     assert __version__ == project_version
     assert USER_AGENT == f"KeyForge/{__version__}"
 

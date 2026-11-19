@@ -9,7 +9,16 @@ from collections.abc import Callable
 from dataclasses import dataclass
 
 from keyforge.engine.backend import KEYFORGE_EXTRA_INFO
-from keyforge.engine.win32_input import get_async_key_state, get_system_cursor_pos
+from keyforge.engine.platform_input import (
+    VK_LBUTTON,
+    VK_MBUTTON,
+    VK_RBUTTON,
+    VK_XBUTTON1,
+    VK_XBUTTON2,
+    platform_get_cursor_pos,
+    platform_get_pressed_states,
+    platform_supports_key_polling,
+)
 from keyforge.models.action import (
     ActionType,
     ClickType,
@@ -25,13 +34,7 @@ from keyforge.models.action import (
 from keyforge.models.keymap import VK_TO_KEY, parse_key_combo
 from keyforge.security.validator import MAX_TOTAL_STEPS
 
-# Mouse Virtual-Key codes for state polling
-VK_LBUTTON = 0x01
-VK_RBUTTON = 0x02
-VK_MBUTTON = 0x04
-VK_XBUTTON1 = 0x05
-VK_XBUTTON2 = 0x06
-
+# Mouse Virtual-Key mapping for state polling
 _MOUSE_VK_MAP: dict[int, MouseButton] = {
     VK_LBUTTON: MouseButton.LEFT,
     VK_RBUTTON: MouseButton.RIGHT,
@@ -72,7 +75,9 @@ class MacroRecorder:
         self._last_event_ts: float | None = None
         self._pending_key_down_ts: dict[str, float] = {}
         self._pending_mouse_down_ts: dict[MouseButton, tuple[float, int | None, int | None]] = {}
-        self._ignored_vks: set[int] = set()
+        self._ignored_single_vks: set[int] = set()
+        self._ignored_combos: list[tuple[int, ...]] = []
+        self._depressed_norm_vks: set[int] = set()
 
     @property
     def is_recording(self) -> bool:
@@ -87,13 +92,34 @@ class MacroRecorder:
     def set_ignored_hotkeys(self, *hotkey_combos: str) -> None:
         """Configure hotkey combinations that should be ignored by the recorder."""
         with self._lock:
-            self._ignored_vks.clear()
+            self._ignored_single_vks.clear()
+            self._ignored_combos.clear()
             for combo in hotkey_combos:
                 try:
-                    for k in parse_key_combo(combo):
-                        self._ignored_vks.add(k.vk_code)
+                    keys = parse_key_combo(combo)
                 except ValueError:
-                    pass
+                    continue
+                if len(keys) == 1:
+                    self._ignored_single_vks.add(keys[0].vk_code)
+                elif len(keys) > 1:
+                    self._ignored_combos.append(tuple(k.vk_code for k in keys))
+
+    def _matches_ignored_combo(self, trigger_norm_vk: int) -> bool:
+        mod_family = {
+            0x11: (0x11, 0xA3),
+            0x10: (0x10, 0xA1),
+            0x12: (0x12, 0xA5),
+            0x5B: (0x5B, 0x5C),
+        }
+        for combo_vks in self._ignored_combos:
+            if combo_vks[-1] != trigger_norm_vk:
+                continue
+            if all(
+                any(v in self._depressed_norm_vks for v in mod_family.get(mod_vk, (mod_vk,)))
+                for mod_vk in combo_vks[:-1]
+            ):
+                return True
+        return False
 
     def start(self, enable_os_poller: bool = True) -> None:
         """Begin a new recording session."""
@@ -104,10 +130,11 @@ class MacroRecorder:
             self._last_event_ts = time.perf_counter()
             self._pending_key_down_ts.clear()
             self._pending_mouse_down_ts.clear()
+            self._depressed_norm_vks.clear()
             self._stop_event.clear()
             self._is_recording = True
 
-            if enable_os_poller:
+            if enable_os_poller and platform_supports_key_polling():
                 self._poll_thread = threading.Thread(
                     target=self._os_poll_loop,
                     name="KeyForge-Recorder",
@@ -150,7 +177,14 @@ class MacroRecorder:
             key_info = VK_TO_KEY.get(vk_code)
             if key_info is None:
                 return
-            if vk_code in self._ignored_vks or key_info.vk_code in self._ignored_vks:
+            norm_vk = key_info.vk_code
+            if is_down:
+                self._depressed_norm_vks.add(norm_vk)
+            else:
+                self._depressed_norm_vks.discard(norm_vk)
+            if vk_code in self._ignored_single_vks or norm_vk in self._ignored_single_vks:
+                return
+            if is_down and self._matches_ignored_combo(norm_vk):
                 return
             cap = min(self.config.max_recorded_steps, MAX_TOTAL_STEPS)
             key_name = key_info.canonical_name
@@ -311,22 +345,26 @@ class MacroRecorder:
     def _os_poll_loop(self) -> None:
         """200 Hz non-blocking key/mouse state transition poller."""
         monitored_key_vks = [vk for vk in VK_TO_KEY if vk not in (0x10, 0x11, 0x12)]
-        prev_key_down: dict[int, bool] = {vk: get_async_key_state(vk) for vk in monitored_key_vks}
-        prev_mouse_down: dict[int, bool] = {vk: get_async_key_state(vk) for vk in _MOUSE_VK_MAP}
+        monitored_mouse_vks = list(_MOUSE_VK_MAP.keys())
+        prev_key_down, prev_mouse_down = platform_get_pressed_states(monitored_key_vks, monitored_mouse_vks)
 
         while not self._stop_event.wait(timeout=0.005):
             now = time.perf_counter()
+            curr_keys, curr_mouse = platform_get_pressed_states(monitored_key_vks, monitored_mouse_vks)
             for vk in monitored_key_vks:
-                is_down = get_async_key_state(vk)
-                if is_down != prev_key_down[vk]:
+                is_down = curr_keys.get(vk, False)
+                if is_down != prev_key_down.get(vk, False):
                     prev_key_down[vk] = is_down
                     self.feed_key_event(vk, is_down=is_down, timestamp_s=now)
 
+            cursor_pos: tuple[int, int] | None = None
             for vk, btn in _MOUSE_VK_MAP.items():
-                is_down = get_async_key_state(vk)
-                if is_down != prev_mouse_down[vk]:
+                is_down = curr_mouse.get(vk, False)
+                if is_down != prev_mouse_down.get(vk, False):
                     prev_mouse_down[vk] = is_down
-                    cx, cy = get_system_cursor_pos()
+                    if cursor_pos is None:
+                        cursor_pos = platform_get_cursor_pos()
+                    cx, cy = cursor_pos
                     self.feed_mouse_button_event(
                         btn,
                         is_down=is_down,

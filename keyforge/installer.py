@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Any
 
 from keyforge import __version__
+from keyforge.assets import get_icon_png_path
 from keyforge.config import get_config_dir
 
 _UNINSTALL_REG_SUBKEY = r"Software\Microsoft\Windows\CurrentVersion\Uninstall\KeyForge"
@@ -24,10 +25,13 @@ def get_default_install_dir() -> Path:
     if env_dir:
         return Path(env_dir).expanduser()
 
-    if sys.platform == "win32" or os.name == "nt":
+    if sys.platform == "win32":
         local_app_data = os.environ.get("LOCALAPPDATA", "").strip()
         base = Path(local_app_data) if local_app_data else (Path.home() / "AppData" / "Local")
         return base / "Programs" / "KeyForge"
+
+    if sys.platform == "darwin":
+        return Path.home() / "Applications" / "KeyForge"
 
     return Path.home() / ".local" / "share" / "KeyForge"
 
@@ -60,6 +64,57 @@ def _get_windows_shortcut_paths() -> tuple[Path, Path]:
     roaming = Path(app_data) if app_data else (Path.home() / "AppData" / "Roaming")
     start_menu = roaming / "Microsoft" / "Windows" / "Start Menu" / "Programs" / "KeyForge.lnk"
     return desktop, start_menu
+
+
+def _get_linux_shortcut_paths() -> tuple[Path, Path]:
+    desktop = Path.home() / "Desktop" / "KeyForge.desktop"
+    xdg_data = os.environ.get("XDG_DATA_HOME", "").strip()
+    data_base = Path(xdg_data).expanduser() if xdg_data else (Path.home() / ".local" / "share")
+    app_menu = data_base / "applications" / "keyforge.desktop"
+    return desktop, app_menu
+
+
+def _create_linux_desktop_entry(
+    entry_path: Path,
+    target_exe: Path,
+    icon_path: Path | None,
+    description: str,
+) -> bool:
+    try:
+        entry_path.parent.mkdir(parents=True, exist_ok=True)
+        icon_line = f"Icon={icon_path}\n" if icon_path is not None and icon_path.exists() else ""
+        content = (
+            "[Desktop Entry]\n"
+            "Version=1.0\n"
+            "Type=Application\n"
+            "Name=KeyForge\n"
+            f"Comment={description}\n"
+            f'Exec="{target_exe}"\n'
+            f"{icon_line}"
+            "Terminal=false\n"
+            "Categories=Utility;\n"
+        )
+        entry_path.write_text(content, encoding="utf-8")
+        with contextlib.suppress(OSError):
+            entry_path.chmod(0o755)
+        return entry_path.exists()
+    except Exception:
+        return False
+
+
+def _get_macos_shortcut_path() -> Path:
+    return Path.home() / "Desktop" / "KeyForge"
+
+
+def _create_macos_shortcut(shortcut_path: Path, target_exe: Path) -> bool:
+    try:
+        shortcut_path.parent.mkdir(parents=True, exist_ok=True)
+        if shortcut_path.exists() or shortcut_path.is_symlink():
+            shortcut_path.unlink()
+        shortcut_path.symlink_to(target_exe)
+        return shortcut_path.is_symlink()
+    except Exception:
+        return False
 
 
 def _create_windows_shortcut(shortcut_path: Path, target_exe: Path, description: str) -> bool:
@@ -200,7 +255,7 @@ def install_keyforge(
     target_dir = Path(install_dir).expanduser() if install_dir is not None else get_default_install_dir()
     target_dir.mkdir(parents=True, exist_ok=True)
 
-    exe_name = "KeyForge.exe" if os.name == "nt" else "KeyForge"
+    exe_name = "KeyForge.exe" if sys.platform == "win32" else "KeyForge"
     installed_exe = target_dir / exe_name
     resolved_source = _resolve_source_executable(source_exe)
 
@@ -210,11 +265,15 @@ def install_keyforge(
     elif not installed_exe.exists():
         installed_exe.write_bytes(b"")
 
-    desktop_lnk, start_menu_lnk = _get_windows_shortcut_paths()
+    if sys.platform != "win32":
+        with contextlib.suppress(OSError):
+            installed_exe.chmod(0o755)
+
     desktop_created: str | None = None
     start_menu_created: str | None = None
 
-    if os.name == "nt":
+    if sys.platform == "win32":
+        desktop_lnk, start_menu_lnk = _get_windows_shortcut_paths()
         if create_desktop_shortcut and _create_windows_shortcut(
             desktop_lnk, installed_exe, f"KeyForge v{__version__} Macro Studio"
         ):
@@ -225,6 +284,41 @@ def install_keyforge(
             start_menu_created = str(start_menu_lnk)
         if register_uninstaller:
             _register_windows_uninstaller(target_dir, installed_exe)
+    elif sys.platform == "darwin":
+        mac_shortcut = _get_macos_shortcut_path()
+        if (
+            create_desktop_shortcut
+            and mac_shortcut.parent.is_dir()
+            and _create_macos_shortcut(mac_shortcut, installed_exe)
+        ):
+            desktop_created = str(mac_shortcut)
+    else:
+        copied_icon: Path | None = None
+        src_icon = get_icon_png_path()
+        if src_icon.is_file():
+            dst_icon = target_dir / "keyforge.png"
+            with contextlib.suppress(OSError):
+                shutil.copy2(src_icon, dst_icon)
+                copied_icon = dst_icon
+        desktop_entry, app_menu_entry = _get_linux_shortcut_paths()
+        if (
+            create_desktop_shortcut
+            and desktop_entry.parent.is_dir()
+            and _create_linux_desktop_entry(
+                desktop_entry,
+                installed_exe,
+                copied_icon,
+                f"KeyForge v{__version__} Macro Studio",
+            )
+        ):
+            desktop_created = str(desktop_entry)
+        if create_start_menu_shortcut and _create_linux_desktop_entry(
+            app_menu_entry,
+            installed_exe,
+            copied_icon,
+            f"KeyForge v{__version__} Macro Studio",
+        ):
+            start_menu_created = str(app_menu_entry)
 
     manifest: dict[str, Any] = {
         "version": __version__,
@@ -257,9 +351,13 @@ def uninstall_keyforge(
                     if isinstance(raw, str) and raw.strip():
                         shortcut_candidates.append(Path(raw))
 
-    if os.name == "nt":
+    if sys.platform == "win32":
         desktop_lnk, start_menu_lnk = _get_windows_shortcut_paths()
         shortcut_candidates.extend([desktop_lnk, start_menu_lnk])
+    elif sys.platform == "darwin":
+        shortcut_candidates.append(_get_macos_shortcut_path())
+    else:
+        shortcut_candidates.extend(_get_linux_shortcut_paths())
 
     for lnk in shortcut_candidates:
         with contextlib.suppress(Exception):

@@ -25,10 +25,10 @@ _KEY_DEFINITIONS: list[tuple[str, int, int, bool, bool, list[str]]] = [
     ("RCtrl", 0xA3, 0x1D, True, True, ["rctrl", "rightctrl", "rightcontrol"]),
     ("Shift", 0x10, 0x2A, False, True, ["shift", "lshift", "leftshift"]),
     ("RShift", 0xA1, 0x36, False, True, ["rshift", "rightshift"]),
-    ("Alt", 0x12, 0x38, False, True, ["alt", "lalt", "leftalt", "menu"]),
-    ("RAlt", 0xA5, 0x38, True, True, ["ralt", "rightalt", "altgr"]),
-    ("Win", 0x5B, 0x5B, True, True, ["win", "lwin", "windows", "super", "meta"]),
-    ("RWin", 0x5C, 0x5C, True, True, ["rwin", "rightwin"]),
+    ("Alt", 0x12, 0x38, False, True, ["alt", "lalt", "leftalt", "menu", "option", "opt"]),
+    ("RAlt", 0xA5, 0x38, True, True, ["ralt", "rightalt", "altgr", "roption", "ropt"]),
+    ("Win", 0x5B, 0x5B, True, True, ["win", "lwin", "windows", "super", "meta", "cmd", "command"]),
+    ("RWin", 0x5C, 0x5C, True, True, ["rwin", "rightwin", "rcmd", "rcommand"]),
     # Special & Navigation keys
     ("Backspace", 0x08, 0x0E, False, False, ["backspace", "bksp", "bs"]),
     ("Tab", 0x09, 0x0F, False, False, ["tab"]),
@@ -237,11 +237,15 @@ _TK_KEYSYM_TO_CANONICAL: dict[str, str] = {
     "shift_r": "RShift",
     "alt_l": "Alt",
     "alt_r": "RAlt",
+    "option_l": "Alt",
+    "option_r": "RAlt",
     "iso_level3_shift": "RAlt",
     "super_l": "Win",
     "super_r": "RWin",
     "meta_l": "Win",
     "meta_r": "RWin",
+    "command_l": "Win",
+    "command_r": "RWin",
     "win_l": "Win",
     "win_r": "RWin",
     "return": "Enter",
@@ -329,7 +333,12 @@ def tk_keysym_to_canonical(keysym: str, keycode: int = 0) -> str | None:
     return None
 
 
-def format_captured_key_combo(keysym: str, state: int = 0, keycode: int = 0) -> str | None:
+def format_captured_key_combo(
+    keysym: str,
+    state: int = 0,
+    keycode: int = 0,
+    platform_name: str | None = None,
+) -> str | None:
     """Build a canonical key or modifier+key combo from a Tkinter KeyPress event.
 
     Returns ``None`` while only modifier keys are pressed so the caller can wait for
@@ -341,12 +350,18 @@ def format_captured_key_combo(keysym: str, state: int = 0, keycode: int = 0) -> 
     if canonical in _MODIFIER_CANONICAL_NAMES:
         return None
 
+    target_platform = platform_name if platform_name is not None else sys.platform
     parts: list[str] = []
     if state & 0x0004:  # Control
         parts.append("Ctrl")
     if state & 0x0001:  # Shift
         parts.append("Shift")
-    if state & (0x0008 | 0x20000):  # Alt (X11 Mod1 or Win32 Alt)
+    if target_platform == "darwin":
+        if state & (0x0010 | 0x20000):  # macOS Option (Mod2) or synthetic Alt mask
+            parts.append("Alt")
+        if state & 0x0008:  # macOS Command (Mod1)
+            parts.append("Win")
+    elif state & (0x0008 | 0x20000):  # Alt (X11 Mod1 or Win32 Alt)
         parts.append("Alt")
     parts.append(canonical)
     return normalize_key_combo("+".join(parts))

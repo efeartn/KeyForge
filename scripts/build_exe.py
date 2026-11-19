@@ -14,12 +14,12 @@ from pathlib import Path
 def get_binary_name() -> str:
     system = platform.system().lower()
     machine = platform.machine().lower()
+    is_arm = "arm" in machine or "aarch64" in machine
     if system == "windows":
         return "KeyForge-Windows-x64"
     if system == "darwin":
-        arch = "arm64" if "arm" in machine or "aarch64" in machine else "x64"
-        return f"KeyForge-macOS-{arch}"
-    return "KeyForge-Linux-x64"
+        return f"KeyForge-macOS-{'arm64' if is_arm else 'x64'}"
+    return f"KeyForge-Linux-{'arm64' if is_arm else 'x64'}"
 
 
 def build_executable() -> int:
@@ -52,12 +52,23 @@ def build_executable() -> int:
     for unused_mod in (
         "unittest",
         "pydoc",
+        "pydoc_data",
         "doctest",
         "sqlite3",
         "xmlrpc",
         "asyncio",
         "multiprocessing",
         "tkinter.tix",
+        "pdb",
+        "bdb",
+        "ftplib",
+        "imaplib",
+        "poplib",
+        "smtplib",
+        "turtle",
+        "venv",
+        "ensurepip",
+        "test",
     ):
         cmd.extend(["--exclude-module", unused_mod])
     if sys.platform == "win32":

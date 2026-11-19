@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import contextlib
+import os
 import subprocess
 import sys
 import tkinter as tk
@@ -101,7 +102,7 @@ class InstallerWindow(ctk.CTk):
 
         heading = f"KeyForge v{__version__} Setup" if self._mode == "setup" else f"Uninstall KeyForge v{__version__}"
         subtitle = (
-            "Install KeyForge to your PC while preserving existing configs & macros"
+            "Install KeyForge on this computer while preserving existing configs & macros"
             if self._mode == "setup"
             else "Remove KeyForge binaries, shortcuts, and app registration"
         )
@@ -187,9 +188,18 @@ class InstallerWindow(ctk.CTk):
                 border_width=1,
                 font=self.fonts["body"],
             ).pack(anchor="w", padx=14, pady=(12, 6))
+            app_menu_label = (
+                "Create Start Menu shortcut"
+                if sys.platform == "win32"
+                else (
+                    "Create Application Menu launcher (.desktop)"
+                    if sys.platform.startswith("linux")
+                    else "Create Applications shortcut"
+                )
+            )
             ctk.CTkCheckBox(
                 opts_card,
-                text="Create Start Menu shortcut",
+                text=app_menu_label,
                 variable=self.start_menu_var,
                 fg_color=CTA_SUCCESS,
                 hover_color=CTA_SUCCESS_HOVER,
@@ -302,6 +312,15 @@ class InstallerWindow(ctk.CTk):
                     with contextlib.suppress(Exception):
                         if sys.platform == "win32" or installed_exe.suffix.lower() == ".exe":
                             subprocess.Popen([str(installed_exe)], close_fds=True)  # noqa: S603
+                        elif os.access(installed_exe, os.X_OK):
+                            subprocess.Popen(  # noqa: S603
+                                [str(installed_exe)],
+                                start_new_session=True,
+                                close_fds=True,
+                                stdin=subprocess.DEVNULL,
+                                stdout=subprocess.DEVNULL,
+                                stderr=subprocess.DEVNULL,
+                            )
                     self._on_close()
             else:
                 uninstall_keyforge(

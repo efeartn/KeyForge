@@ -11,7 +11,7 @@ import tkinter.font as tkfont
 from typing import Any
 
 import customtkinter as ctk
-from PIL import Image
+from PIL import Image, ImageTk
 
 from keyforge.assets import get_icon_ico_path, get_icon_png_path
 from keyforge.models.action import ActionType
@@ -204,7 +204,12 @@ def apply_window_icon(window: Any) -> bool:
 
     if png_path.exists():
         with contextlib.suppress(Exception):
-            photo = tk.PhotoImage(master=window, file=str(png_path))
+            pil_icon = _get_cached_brand_pil_image()
+            photo = (
+                ImageTk.PhotoImage(master=window, image=pil_icon)
+                if pil_icon is not None
+                else tk.PhotoImage(master=window, file=str(png_path))
+            )
             window._kf_icon_photo_ref = photo
             window.wm_iconphoto(True, photo)
             applied = True
@@ -229,8 +234,8 @@ def _safe_set_iconbitmap(window: Any, ico_str: str) -> None:
 _CACHED_BRAND_PIL_IMAGE: Image.Image | None = None
 
 
-def load_brand_ctk_image(size: tuple[int, int] = (32, 32)) -> ctk.CTkImage | None:
-    """Load the bundled KeyForge icon as a high-DPI CTkImage using a cached PIL source."""
+def _get_cached_brand_pil_image() -> Image.Image | None:
+    """Load and cache a compact 64x64 RGBA brand icon PIL image to minimize idle RAM."""
     global _CACHED_BRAND_PIL_IMAGE
     if _CACHED_BRAND_PIL_IMAGE is None:
         png_path = get_icon_png_path()
@@ -238,11 +243,20 @@ def load_brand_ctk_image(size: tuple[int, int] = (32, 32)) -> ctk.CTkImage | Non
             return None
         with contextlib.suppress(Exception):
             with Image.open(png_path) as opened:
-                _CACHED_BRAND_PIL_IMAGE = opened.convert("RGBA").copy()
-    if _CACHED_BRAND_PIL_IMAGE is None:
+                rgba = opened.convert("RGBA")
+                if rgba.width > 64 or rgba.height > 64:
+                    rgba = rgba.resize((64, 64), Image.Resampling.LANCZOS)
+                _CACHED_BRAND_PIL_IMAGE = rgba
+    return _CACHED_BRAND_PIL_IMAGE
+
+
+def load_brand_ctk_image(size: tuple[int, int] = (32, 32)) -> ctk.CTkImage | None:
+    """Load the bundled KeyForge icon as a high-DPI CTkImage using a cached PIL source."""
+    cached = _get_cached_brand_pil_image()
+    if cached is None:
         return None
     with contextlib.suppress(Exception):
-        return ctk.CTkImage(light_image=_CACHED_BRAND_PIL_IMAGE, dark_image=_CACHED_BRAND_PIL_IMAGE, size=size)
+        return ctk.CTkImage(light_image=cached, dark_image=cached, size=size)
     return None
 
 
@@ -284,8 +298,16 @@ def get_logical_workarea(window: Any) -> tuple[int, int, int, int, float]:
 
     sw = max(640, int(window.winfo_screenwidth()))
     sh = max(480, int(window.winfo_screenheight()))
-    # Reserve small margin for OS menu bar / taskbar on macOS & Linux
+    if sys.platform == "darwin":
+        # Reserve macOS top menu bar (28pt) and bottom dock area
+        return (0, 28, sw, max(440, sh - 64), scale)
+    # Reserve small margin for taskbar on Linux
     return (0, 0, sw, max(440, sh - 36), scale)
+
+
+def get_geometry_coord_scale(scale: float) -> float:
+    """Return coordinate multiplier for Tk geometry(+x+y) offsets (scaled on Win32, logical on POSIX)."""
+    return scale if sys.platform == "win32" else 1.0
 
 
 def center_window_on_parent(
@@ -297,17 +319,18 @@ def center_window_on_parent(
     """Size ``window`` clamped to the monitor workarea and center it on ``parent``."""
     ref = parent if parent is not None else window
     work_left, work_top, work_w, work_h, scale = get_logical_workarea(ref)
+    coord_scale = get_geometry_coord_scale(scale)
 
     w = min(logical_w, max(360, work_w - 24))
     h = min(logical_h, max(320, work_h - 40))
 
-    px_w = round(w * scale)
-    px_h = round(h * scale)
-    work_right = work_left + round(work_w * scale)
-    work_bottom = work_top + round(work_h * scale)
+    px_w = round(w * coord_scale)
+    px_h = round(h * coord_scale)
+    work_right = work_left + round(work_w * coord_scale)
+    work_bottom = work_top + round(work_h * coord_scale)
 
-    x_px = work_left + max(0, (round(work_w * scale) - px_w) // 2)
-    y_px = work_top + max(0, (round(work_h * scale) - px_h) // 2)
+    x_px = work_left + max(0, (round(work_w * coord_scale) - px_w) // 2)
+    y_px = work_top + max(0, (round(work_h * coord_scale) - px_h) // 2)
 
     if parent is not None:
         with contextlib.suppress(Exception):

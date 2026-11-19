@@ -921,6 +921,11 @@ def test_installer_install_and_uninstall_preserves_user_data(
 
     cfg_dir = tmp_path / "user_config"
     install_dir = tmp_path / "programs" / "KeyForge"
+    fake_home = tmp_path / "fake_home"
+    fake_home.mkdir(parents=True, exist_ok=True)
+    monkeypatch.setenv("HOME", str(fake_home))
+    monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / "xdg_data"))
+    monkeypatch.setattr(Path, "home", classmethod(lambda cls: fake_home))
     monkeypatch.setenv("KEYFORGE_CONFIG_DIR", str(cfg_dir))
     monkeypatch.setenv("KEYFORGE_INSTALL_DIR", str(install_dir))
 
