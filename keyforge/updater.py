@@ -639,10 +639,12 @@ def build_windows_hotswap_script(new_binary: Path, target_exe: Path, app_pid: in
     new_bin_str = _validate_hotswap_path(new_binary, "new_binary")
     target_exe_str = _validate_hotswap_path(target_exe, "target_exe")
     backup_exe_str = f"{target_exe_str}.old"
+    stage_exe_str = f"{target_exe_str}.new"
 
     ps_new = _ps_single_quote(new_bin_str)
     ps_target = _ps_single_quote(target_exe_str)
     ps_backup = _ps_single_quote(backup_exe_str)
+    ps_stage = _ps_single_quote(stage_exe_str)
 
     return "\n".join(
         [
@@ -650,46 +652,95 @@ def build_windows_hotswap_script(new_binary: Path, target_exe: Path, app_pid: in
             f"$NewBinary = {ps_new}",
             f"$TargetExe = {ps_target}",
             f"$BackupExe = {ps_backup}",
+            f"$StageExe = {ps_stage}",
             "$WorkDir = Split-Path -LiteralPath $TargetExe -Parent",
             "",
-            "$Deadline = (Get-Date).AddSeconds(15)",
+            "$Deadline = (Get-Date).AddSeconds(30)",
             "while ((Get-Date) -lt $Deadline) {",
             "    $proc = Get-Process -Id $TargetPid -ErrorAction SilentlyContinue",
-            "    if ($null -eq $proc) { break }",
-            "    Start-Sleep -Milliseconds 200",
+            "    $running = @(Get-Process -ErrorAction SilentlyContinue | Where-Object { $_.Path -eq $TargetExe })",
+            "    if (($null -eq $proc) -and ($running.Count -eq 0)) { break }",
+            "    Start-Sleep -Milliseconds 250",
             "}",
             "",
-            "if (Test-Path -LiteralPath $BackupExe) {",
-            "    Remove-Item -LiteralPath $BackupExe -Force -ErrorAction SilentlyContinue",
+            "if ($NewBinary -eq $TargetExe) {",
+            "    if (Test-Path -LiteralPath $TargetExe) {",
+            "        Start-Process -FilePath $TargetExe -WorkingDirectory $WorkDir",
+            "        exit 0",
+            "    }",
+            "    exit 1",
+            "}",
+            "",
+            "if ((-not (Test-Path -LiteralPath $NewBinary)) -or ((Get-Item -LiteralPath $NewBinary).Length -le 0)) {",
+            "    exit 1",
+            "}",
+            "",
+            "if (Test-Path -LiteralPath $StageExe) {",
+            "    Remove-Item -LiteralPath $StageExe -Force -ErrorAction SilentlyContinue",
             "}",
             "",
             "$Swapped = $false",
             "for ($Attempt = 0; $Attempt -lt 15; $Attempt++) {",
             "    try {",
+            "        Copy-Item -LiteralPath $NewBinary -Destination $StageExe -Force -ErrorAction Stop",
+            "        if (-not (Test-Path -LiteralPath $StageExe)) { throw 'Staged binary copy failed' }",
+            "        if ((Get-Item -LiteralPath $StageExe).Length -le 0) { throw 'Staged binary empty' }",
             "        if (Test-Path -LiteralPath $TargetExe) {",
-            "            if (-not (Test-Path -LiteralPath $BackupExe)) {",
-            "                Move-Item -LiteralPath $TargetExe -Destination $BackupExe -Force -ErrorAction Stop",
-            "            } else {",
-            "                Remove-Item -LiteralPath $TargetExe -Force -ErrorAction Stop",
+            "            if (Test-Path -LiteralPath $BackupExe) {",
+            "                Remove-Item -LiteralPath $BackupExe -Force -ErrorAction SilentlyContinue",
             "            }",
+            "            Move-Item -LiteralPath $TargetExe -Destination $BackupExe -Force -ErrorAction Stop",
             "        }",
-            "        Move-Item -LiteralPath $NewBinary -Destination $TargetExe -Force -ErrorAction Stop",
-            "        $Swapped = $true",
-            "        break",
+            "        Move-Item -LiteralPath $StageExe -Destination $TargetExe -Force -ErrorAction Stop",
+            "        if ((Test-Path -LiteralPath $TargetExe) -and ((Get-Item -LiteralPath $TargetExe).Length -gt 0)) {",
+            "            $Swapped = $true",
+            "            break",
+            "        }",
             "    } catch {",
+            "        if ((-not (Test-Path -LiteralPath $TargetExe)) -and (Test-Path -LiteralPath $BackupExe)) {",
+            (
+                "            Move-Item -LiteralPath $BackupExe -Destination $TargetExe "
+                "-Force -ErrorAction SilentlyContinue"
+            ),
+            "        }",
             "        Start-Sleep -Milliseconds 300",
             "    }",
             "}",
             "",
             "if (-not $Swapped) {",
-            "    if ((-not (Test-Path -LiteralPath $TargetExe)) -and (Test-Path -LiteralPath $BackupExe)) {",
-            "        Move-Item -LiteralPath $BackupExe -Destination $TargetExe -Force -ErrorAction SilentlyContinue",
+            "    if (Test-Path -LiteralPath $StageExe) {",
+            "        Remove-Item -LiteralPath $StageExe -Force -ErrorAction SilentlyContinue",
+            "    }",
+            "    for ($Rollback = 0; $Rollback -lt 15; $Rollback++) {",
+            "        if (Test-Path -LiteralPath $TargetExe) { break }",
+            "        if (Test-Path -LiteralPath $BackupExe) {",
+            (
+                "            Move-Item -LiteralPath $BackupExe -Destination $TargetExe "
+                "-Force -ErrorAction SilentlyContinue"
+            ),
+            "            if (-not (Test-Path -LiteralPath $TargetExe)) {",
+            (
+                "                Copy-Item -LiteralPath $BackupExe -Destination $TargetExe "
+                "-Force -ErrorAction SilentlyContinue"
+            ),
+            "            }",
+            "        }",
+            "        Start-Sleep -Milliseconds 200",
             "    }",
             "    exit 1",
             "}",
             "",
-            "if (Test-Path -LiteralPath $BackupExe) {",
+            "if (Test-Path -LiteralPath $StageExe) {",
+            "    Remove-Item -LiteralPath $StageExe -Force -ErrorAction SilentlyContinue",
+            "}",
+            "if ((Test-Path -LiteralPath $TargetExe) -and (Test-Path -LiteralPath $BackupExe)) {",
             "    Remove-Item -LiteralPath $BackupExe -Force -ErrorAction SilentlyContinue",
+            "}",
+            (
+                "if ((Test-Path -LiteralPath $TargetExe) -and (Test-Path -LiteralPath $NewBinary) "
+                "-and ($NewBinary -ne $TargetExe)) {"
+            ),
+            "    Remove-Item -LiteralPath $NewBinary -Force -ErrorAction SilentlyContinue",
             "}",
             "",
             "Start-Process -FilePath $TargetExe -WorkingDirectory $WorkDir",

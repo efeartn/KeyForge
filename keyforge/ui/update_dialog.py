@@ -536,6 +536,11 @@ class UpdateDialog(ctk.CTkToplevel):
         updates_dir = get_config_dir() / "updates"
         filename = release.asset_name or f"KeyForge-v{release.version}.bin"
         target_path = updates_dir / Path(filename).name
+        if getattr(sys, "frozen", False):
+            with contextlib.suppress(Exception):
+                if Path(sys.executable).resolve() == target_path.resolve():
+                    suffix = target_path.suffix or ".bin"
+                    target_path = updates_dir / f"KeyForge-update-v{release.version}{suffix}"
 
         self._ensure_queue_polling()
         threading.Thread(

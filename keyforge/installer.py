@@ -18,6 +18,65 @@ from keyforge.config import get_config_dir
 
 _UNINSTALL_REG_SUBKEY = r"Software\Microsoft\Windows\CurrentVersion\Uninstall\KeyForge"
 
+_REAL_HOST_DESKTOP_LNK: Path = (
+    Path(os.environ.get("USERPROFILE", str(Path.home()))) / "Desktop" / "KeyForge.lnk"
+).resolve(strict=False)
+_REAL_HOST_START_MENU_LNK: Path = (
+    (Path(os.environ["APPDATA"]) if os.environ.get("APPDATA", "").strip() else (Path.home() / "AppData" / "Roaming"))
+    / "Microsoft"
+    / "Windows"
+    / "Start Menu"
+    / "Programs"
+    / "KeyForge.lnk"
+).resolve(strict=False)
+_REAL_HOST_INSTALL_DIR: Path = (
+    (
+        Path(os.environ["LOCALAPPDATA"])
+        if os.environ.get("LOCALAPPDATA", "").strip()
+        else (Path.home() / "AppData" / "Local")
+    )
+    / "Programs"
+    / "KeyForge"
+).resolve(strict=False)
+_REAL_HOST_MACOS_LNK: Path = (Path.home() / "Desktop" / "KeyForge").resolve(strict=False)
+_REAL_HOST_LINUX_DESKTOP_LNK: Path = (Path.home() / "Desktop" / "KeyForge.desktop").resolve(strict=False)
+_REAL_HOST_LINUX_APP_LNK: Path = (
+    (
+        Path(os.environ["XDG_DATA_HOME"]).expanduser()
+        if os.environ.get("XDG_DATA_HOME", "").strip()
+        else (Path.home() / ".local" / "share")
+    )
+    / "applications"
+    / "keyforge.desktop"
+).resolve(strict=False)
+_PROTECTED_HOST_SHORTCUTS: frozenset[Path] = frozenset(
+    {
+        _REAL_HOST_DESKTOP_LNK,
+        _REAL_HOST_START_MENU_LNK,
+        _REAL_HOST_MACOS_LNK,
+        _REAL_HOST_LINUX_DESKTOP_LNK,
+        _REAL_HOST_LINUX_APP_LNK,
+    }
+)
+
+
+def _is_protected_host_shortcut(path: Path) -> bool:
+    """Return True if running inside pytest and ``path`` points to a real host user shortcut."""
+    if not os.environ.get("PYTEST_CURRENT_TEST"):
+        return False
+    with contextlib.suppress(Exception):
+        return path.expanduser().resolve(strict=False) in _PROTECTED_HOST_SHORTCUTS
+    return True
+
+
+def _is_protected_host_install_dir(path: Path) -> bool:
+    """Return True if running inside pytest and ``path`` points to the real host install directory."""
+    if not os.environ.get("PYTEST_CURRENT_TEST"):
+        return False
+    with contextlib.suppress(Exception):
+        return path.expanduser().resolve(strict=False) == _REAL_HOST_INSTALL_DIR
+    return True
+
 
 def get_default_install_dir() -> Path:
     """Return the default per-user installation directory for KeyForge."""
@@ -80,6 +139,8 @@ def _create_linux_desktop_entry(
     icon_path: Path | None,
     description: str,
 ) -> bool:
+    if _is_protected_host_shortcut(entry_path):
+        return False
     try:
         entry_path.parent.mkdir(parents=True, exist_ok=True)
         icon_line = f"Icon={icon_path}\n" if icon_path is not None and icon_path.exists() else ""
@@ -107,6 +168,8 @@ def _get_macos_shortcut_path() -> Path:
 
 
 def _create_macos_shortcut(shortcut_path: Path, target_exe: Path) -> bool:
+    if _is_protected_host_shortcut(shortcut_path):
+        return False
     try:
         shortcut_path.parent.mkdir(parents=True, exist_ok=True)
         if shortcut_path.exists() or shortcut_path.is_symlink():
@@ -118,7 +181,7 @@ def _create_macos_shortcut(shortcut_path: Path, target_exe: Path) -> bool:
 
 
 def _create_windows_shortcut(shortcut_path: Path, target_exe: Path, description: str) -> bool:
-    if os.name != "nt":
+    if os.name != "nt" or _is_protected_host_shortcut(shortcut_path):
         return False
     try:
         shortcut_path.parent.mkdir(parents=True, exist_ok=True)
@@ -157,7 +220,7 @@ def _create_windows_shortcut(shortcut_path: Path, target_exe: Path, description:
 
 
 def _register_windows_uninstaller(target_dir: Path, installed_exe: Path) -> bool:
-    if os.name != "nt":
+    if os.name != "nt" or os.environ.get("PYTEST_CURRENT_TEST"):
         return False
     try:
         import winreg
@@ -184,7 +247,7 @@ def _register_windows_uninstaller(target_dir: Path, installed_exe: Path) -> bool
 
 
 def _unregister_windows_uninstaller() -> None:
-    if os.name != "nt":
+    if os.name != "nt" or os.environ.get("PYTEST_CURRENT_TEST"):
         return
     with contextlib.suppress(Exception):
         import winreg
@@ -253,10 +316,19 @@ def install_keyforge(
 ) -> dict[str, Any]:
     """Install KeyForge standalone binary into ``install_dir`` and register shortcuts/uninstaller."""
     target_dir = Path(install_dir).expanduser() if install_dir is not None else get_default_install_dir()
-    target_dir.mkdir(parents=True, exist_ok=True)
-
     exe_name = "KeyForge.exe" if sys.platform == "win32" else "KeyForge"
     installed_exe = target_dir / exe_name
+
+    if _is_protected_host_install_dir(target_dir):
+        return {
+            "version": __version__,
+            "installed_exe": str(installed_exe),
+            "desktop_shortcut": None,
+            "start_menu_shortcut": None,
+            "config_dir": str(get_config_dir()),
+        }
+
+    target_dir.mkdir(parents=True, exist_ok=True)
     resolved_source = _resolve_source_executable(source_exe)
 
     if resolved_source.is_file():
@@ -338,7 +410,19 @@ def uninstall_keyforge(
     spawn_self_delete: bool = True,
 ) -> dict[str, Any]:
     """Uninstall KeyForge binaries/shortcuts/registry, keeping user data intact by default."""
-    target_dir = Path(install_dir).expanduser() if install_dir is not None else get_default_install_dir()
+    default_dir = get_default_install_dir()
+    target_dir = Path(install_dir).expanduser() if install_dir is not None else default_dir
+    if _is_protected_host_install_dir(target_dir):
+        return {
+            "uninstalled_dir": str(target_dir),
+            "purged_user_data": False,
+        }
+
+    is_default_target = install_dir is None
+    if not is_default_target:
+        with contextlib.suppress(Exception):
+            is_default_target = target_dir.resolve(strict=False) == default_dir.resolve(strict=False)
+
     manifest_path = target_dir / "install_manifest.json"
 
     shortcut_candidates: list[Path] = []
@@ -351,20 +435,24 @@ def uninstall_keyforge(
                     if isinstance(raw, str) and raw.strip():
                         shortcut_candidates.append(Path(raw))
 
-    if sys.platform == "win32":
-        desktop_lnk, start_menu_lnk = _get_windows_shortcut_paths()
-        shortcut_candidates.extend([desktop_lnk, start_menu_lnk])
-    elif sys.platform == "darwin":
-        shortcut_candidates.append(_get_macos_shortcut_path())
-    else:
-        shortcut_candidates.extend(_get_linux_shortcut_paths())
+    if is_default_target:
+        if sys.platform == "win32":
+            desktop_lnk, start_menu_lnk = _get_windows_shortcut_paths()
+            shortcut_candidates.extend([desktop_lnk, start_menu_lnk])
+        elif sys.platform == "darwin":
+            shortcut_candidates.append(_get_macos_shortcut_path())
+        else:
+            shortcut_candidates.extend(_get_linux_shortcut_paths())
 
     for lnk in shortcut_candidates:
+        if _is_protected_host_shortcut(lnk):
+            continue
         with contextlib.suppress(Exception):
             if lnk.exists() or lnk.is_symlink():
                 lnk.unlink()
 
-    _unregister_windows_uninstaller()
+    if is_default_target:
+        _unregister_windows_uninstaller()
 
     if purge_user_data:
         config_dir = get_config_dir()

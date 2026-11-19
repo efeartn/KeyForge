@@ -856,9 +856,12 @@ def test_build_windows_hotswap_script_and_dry_run_powershell_ast(
     assert "'C:\\Users\\O''Connor & Co\\App Data\\updates\\KeyForge''s & New.exe'" in script
     assert "'C:\\Users\\O''Connor & Co\\KeyForge App\\KeyForge.exe'" in script
     assert "'C:\\Users\\O''Connor & Co\\KeyForge App\\KeyForge.exe.old'" in script
+    assert "'C:\\Users\\O''Connor & Co\\KeyForge App\\KeyForge.exe.new'" in script
     assert "Get-Process -Id $TargetPid" in script
     assert "for ($Attempt = 0; $Attempt -lt 15; $Attempt++)" in script
+    assert "Copy-Item -LiteralPath $NewBinary -Destination $StageExe" in script
     assert "Move-Item -LiteralPath $BackupExe -Destination $TargetExe" in script
+    assert "Remove-Item -LiteralPath $TargetExe" not in script
     assert "Start-Process -FilePath $TargetExe -WorkingDirectory $WorkDir" in script
 
     # 4. Dry-run command generation & UTF-16LE -EncodedCommand round-trip
@@ -924,6 +927,9 @@ def test_installer_install_and_uninstall_preserves_user_data(
     fake_home = tmp_path / "fake_home"
     fake_home.mkdir(parents=True, exist_ok=True)
     monkeypatch.setenv("HOME", str(fake_home))
+    monkeypatch.setenv("USERPROFILE", str(fake_home))
+    monkeypatch.setenv("APPDATA", str(fake_home / "AppData" / "Roaming"))
+    monkeypatch.setenv("LOCALAPPDATA", str(fake_home / "AppData" / "Local"))
     monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / "xdg_data"))
     monkeypatch.setattr(Path, "home", classmethod(lambda cls: fake_home))
     monkeypatch.setenv("KEYFORGE_CONFIG_DIR", str(cfg_dir))
@@ -1011,3 +1017,91 @@ def test_custom_presets_save_load_delete_and_countdown_config(tmp_path: Path) ->
     assert delete_custom_preset("Farm Combo v2!", custom_dir=tmp_path) is True
     assert delete_custom_preset("Farm Combo v2!", custom_dir=tmp_path) is False
     assert load_custom_presets(custom_dir=tmp_path) == {}
+
+
+def test_windows_self_deletion_prevention_hotswap_and_host_shortcut_guards(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from keyforge import installer
+
+    # 1. Host shortcut & install directory guards must protect real host paths during pytest
+    assert installer._is_protected_host_shortcut(installer._REAL_HOST_DESKTOP_LNK) is True
+    assert installer._is_protected_host_shortcut(installer._REAL_HOST_START_MENU_LNK) is True
+    assert installer._is_protected_host_install_dir(installer._REAL_HOST_INSTALL_DIR) is True
+    assert installer._is_protected_host_shortcut(tmp_path / "Desktop" / "KeyForge.lnk") is False
+    assert installer._is_protected_host_install_dir(tmp_path / "Programs" / "KeyForge") is False
+
+    # 2. Uninstalling a custom directory must NOT delete global shortcuts outside its manifest
+    fake_home = tmp_path / "isolated_home"
+    fake_desktop_lnk = fake_home / "Desktop" / "KeyForge.lnk"
+    fake_desktop_lnk.parent.mkdir(parents=True, exist_ok=True)
+    fake_desktop_lnk.write_bytes(b"SHORTCUT-DATA")
+
+    monkeypatch.setenv("HOME", str(fake_home))
+    monkeypatch.setenv("USERPROFILE", str(fake_home))
+    monkeypatch.setenv("APPDATA", str(fake_home / "AppData" / "Roaming"))
+    monkeypatch.setenv("LOCALAPPDATA", str(fake_home / "AppData" / "Local"))
+    monkeypatch.setattr(Path, "home", classmethod(lambda cls: fake_home))
+    monkeypatch.setenv("KEYFORGE_INSTALL_DIR", str(fake_home / "DefaultInstall"))
+
+    custom_dir = tmp_path / "custom_portable_dir"
+    custom_dir.mkdir(parents=True, exist_ok=True)
+    (custom_dir / "KeyForge.exe").write_bytes(b"MZ-CUSTOM")
+    (custom_dir / "install_manifest.json").write_text(
+        json.dumps({"version": "1.6.1", "desktop_shortcut": None, "start_menu_shortcut": None}),
+        encoding="utf-8",
+    )
+
+    installer.uninstall_keyforge(install_dir=custom_dir, purge_user_data=False, spawn_self_delete=False)
+    assert not custom_dir.exists()
+    assert fake_desktop_lnk.is_file(), "Custom-dir uninstall must not delete global desktop shortcut!"
+
+    # 3. On Windows, execute the generated PowerShell hot-swap script end-to-end
+    if os.name == "nt":
+        ps_exe = installer._resolve_powershell_executable()
+        app_dir = tmp_path / "win_hotswap"
+        app_dir.mkdir(parents=True, exist_ok=True)
+        target_exe = app_dir / "KeyForge.exe"
+        backup_exe = app_dir / "KeyForge.exe.old"
+        new_bin = tmp_path / "updates" / "KeyForge-Windows-x64.exe"
+        new_bin.parent.mkdir(parents=True, exist_ok=True)
+
+        # Case A: Missing/removed NewBinary must never delete or modify TargetExe
+        target_exe.write_bytes(b"MZ-ORIGINAL-EXE")
+        backup_exe.write_bytes(b"MZ-STALE-OLD-BACKUP")
+        script_missing = build_windows_hotswap_script(new_bin, target_exe, app_pid=999999).replace(
+            "Start-Process -FilePath $TargetExe -WorkingDirectory $WorkDir",
+            "Write-Output 'LAUNCHED'",
+        )
+        res_missing = subprocess.run(  # noqa: S603
+            [ps_exe, "-NoProfile", "-NonInteractive", "-Command", script_missing],
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=15,
+        )
+        assert res_missing.returncode == 1
+        assert target_exe.is_file()
+        assert target_exe.read_bytes() == b"MZ-ORIGINAL-EXE"
+
+        # Case B: Happy path with pre-existing .old backup swaps cleanly and removes .old/.new/NewBinary
+        new_bin.write_bytes(b"MZ-UPDATED-V161-EXE")
+        script_ok = build_windows_hotswap_script(new_bin, target_exe, app_pid=999999).replace(
+            "Start-Process -FilePath $TargetExe -WorkingDirectory $WorkDir",
+            "Write-Output 'LAUNCHED'",
+        )
+        res_ok = subprocess.run(  # noqa: S603
+            [ps_exe, "-NoProfile", "-NonInteractive", "-Command", script_ok],
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=15,
+        )
+        assert res_ok.returncode == 0, f"Hot-swap failed: {res_ok.stderr}"
+        assert "LAUNCHED" in res_ok.stdout
+        assert target_exe.is_file()
+        assert target_exe.read_bytes() == b"MZ-UPDATED-V161-EXE"
+        assert not backup_exe.exists()
+        assert not (app_dir / "KeyForge.exe.new").exists()
+        assert not new_bin.exists()
