@@ -16,53 +16,8 @@ permissions:
   contents: write
 
 jobs:
-  test-and-audit:
-    name: Test & Security Audit (${{ matrix.os }} / Python ${{ matrix.python-version }})
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [windows-latest, ubuntu-latest]
-        python-version: ["3.11", "3.12", "3.13"]
-
-    steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
-
-      - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v5
-        with:
-          python-version: ${{ matrix.python-version }}
-          cache: "pip"
-
-      - name: Install Linux Tkinter Dependencies
-        if: runner.os == 'Linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y python3-tk xvfb libxtst6
-
-      - name: Install KeyForge & Dev Dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -e ".[dev]"
-
-      - name: Run Ruff Static Linter & Security Rules
-        run: |
-          python -m ruff check keyforge tests scripts
-          python -m ruff format --check keyforge tests scripts
-
-      - name: Run Full Test & Coverage Suite (Windows)
-        if: runner.os == 'Windows'
-        run: |
-          python -m pytest --cov=keyforge --cov-report=term-missing
-
-      - name: Run Full Test & Coverage Suite (Linux / Xvfb)
-        if: runner.os == 'Linux'
-        run: |
-          xvfb-run -a python -m pytest --cov=keyforge --cov-report=term-missing
-
-  compile-executables:
-    name: Test, Audit & Compile Binary (${{ matrix.os }})
+  test-and-compile:
+    name: Rust Lint, Test & Build (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -73,45 +28,87 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Set up Python 3.12
-        uses: actions/setup-python@v5
+      - name: Install Rust Toolchain (stable + rustfmt + clippy)
+        uses: dtolnay/rust-toolchain@stable
         with:
-          python-version: "3.12"
-          cache: "pip"
+          components: rustfmt, clippy
 
-      - name: Install Linux Build Dependencies
+      - name: Cache Cargo Crates & Build Target
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock', '**/Cargo.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+
+      - name: Install Linux X11/XTest Dependencies
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y python3-tk xvfb binutils libxtst6
+          sudo apt-get install -y libxtst6 libx11-6 xvfb
 
-      - name: Install KeyForge, Dev Suite & PyInstaller
-        run: |
-          python -m pip install --upgrade pip
-          pip install -e ".[dev]" pyinstaller
+      - name: Check Formatting (rustfmt)
+        run: cargo fmt --all -- --check
 
-      - name: Run Cross-Platform Ruff & Test Suite (Non-Linux)
+      - name: Run Clippy Static Linter (-D warnings)
+        run: cargo clippy --all-targets -- -D warnings
+
+      - name: Run Full Rust Test Suite (Non-Linux)
         if: runner.os != 'Linux'
-        run: |
-          python -m ruff check keyforge tests scripts
-          python -m pytest
+        run: cargo test --all-targets
 
-      - name: Run Cross-Platform Ruff & Test Suite (Linux / Xvfb)
+      - name: Run Full Rust Test Suite (Linux / Xvfb)
         if: runner.os == 'Linux'
-        run: |
-          python -m ruff check keyforge tests scripts
-          xvfb-run -a python -m pytest
+        run: xvfb-run -a cargo test --all-targets
 
-      - name: Compile Standalone Executable via PyInstaller
-        run: |
-          python scripts/build_exe.py
+      - name: Compile Release Binary
+        run: cargo build --release --locked
 
-      - name: Smoke-Test Compiled Binary (CLI Dry-Run & Security Audit)
+      - name: Package Platform Binaries & SHA-256 Checksums
         shell: bash
         run: |
-          ls -la dist/
+          mkdir -p dist
+          OS="${{ runner.os }}"
+          ARCH=$(uname -m)
+          if [ "$OS" = "Windows" ]; then
+            cp target/release/keyforge.exe dist/KeyForge-Windows-x64.exe
+            cp target/release/keyforge.exe dist/KeyForge-Setup-Windows-x64.exe
+          elif [ "$OS" = "macOS" ]; then
+            if [ "$ARCH" = "arm64" ]; then
+              cp target/release/keyforge dist/KeyForge-macOS-arm64
+            else
+              cp target/release/keyforge dist/KeyForge-macOS-x64
+            fi
+          else
+            if [ "$ARCH" = "aarch64" ] || [ "$ARCH" = "arm64" ]; then
+              cp target/release/keyforge dist/KeyForge-Linux-arm64
+            else
+              cp target/release/keyforge dist/KeyForge-Linux-x64
+            fi
+          fi
+
+          (
+            cd dist
+            for f in *; do
+              [ -f "$f" ] || continue
+              chmod +x "$f" || true
+              if command -v sha256sum >/dev/null 2>&1; then
+                sha256sum "$f" > "${f}.sha256.txt"
+              else
+                shasum -a 256 "$f" > "${f}.sha256.txt"
+              fi
+            done
+          )
+          ls -lh dist/
+
+      - name: Smoke-Test Compiled Release Binary
+        shell: bash
+        run: |
           BIN=$(find dist -maxdepth 1 -type f ! -name "*.txt" ! -name "*Setup*" | head -n 1)
-          chmod +x "$BIN" || true
           "$BIN" --version
           "$BIN" --expr "Press E -> Wait 50ms -> Click -> Press 1" --repeat 2 --dry-run
 
@@ -125,7 +122,7 @@ jobs:
 
   publish-release:
     name: Publish GitHub Release Binaries
-    needs: [test-and-audit, compile-executables]
+    needs: [test-and-compile]
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     steps:

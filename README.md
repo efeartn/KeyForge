@@ -1,20 +1,20 @@
 <div align="center">
 
-<img src="keyforge/assets/icon.png" alt="KeyForge Studio Logo" width="112" height="112" />
+<img src="assets/icon.png" alt="KeyForge Studio Logo" width="112" height="112" />
 
 # KeyForge
 
-**Precision Obsidian & Mint Emerald Keyboard & Macro Sequence Studio & Live Input Recorder.**  
-Free, Open-Source (`GPL-3.0`), Cybersecurity-Hardened, and Native for Windows, macOS & Linux — with Zero Browser Bloat.
+**Precision Native Rust Keyboard & Macro Sequence Studio & Live Input Recorder.**  
+Free, Open-Source (`GPL-3.0-or-later`), Cybersecurity-Hardened, Obsidian & Mint Emerald GUI, and Native for Windows, macOS & Linux — with Zero Python Runtime or WebView Bloat.
 
 [![CI & Release Compiler](https://github.com/efeartn/KeyForge/actions/workflows/ci.yml/badge.svg)](https://github.com/efeartn/KeyForge/actions/workflows/ci.yml)
 [![Latest Release](https://img.shields.io/github/v/release/efeartn/KeyForge?color=2EE59D&label=Release)](https://github.com/efeartn/KeyForge/releases/latest)
 [![Platform: Windows | macOS | Linux](https://img.shields.io/badge/Platform-Windows%20%7C%20macOS%20%7C%20Linux-0EA5E9)](https://github.com/efeartn/KeyForge/releases/latest)
-[![Python: 3.10+](https://img.shields.io/badge/Python-3.10%20%7C%203.11%20%7C%203.12%20%7C%203.13-3776AB)](pyproject.toml)
+[![Built With: Pure Native Rust](https://img.shields.io/badge/Rust-Pure%20Native%20eframe%2Fegui-F97316)](Cargo.toml)
 [![Security: SHA-256 Signed + Static Auditor](https://img.shields.io/badge/Security-SHA--256%20Verified%20%2B%20Static%20Auditor-10B981)](SECURITY.md)
 [![License: GPL-3.0](https://img.shields.io/badge/License-GPL--3.0-8B5CF6.svg)](LICENSE)
 
-[**Download v1.6.1**](#download-standalone-executables) • [**Release Notes**](RELEASE_NOTES.md) • [**Visual Tour**](#visual-tour) • [**Cross-Platform Engine**](#cross-platform-support-windows--macos--linux) • [**Setup Installer & Updater**](#setup-installer--auto-updater) • [**Sequence DSL**](#sequence-dsl-reference) • [**Cybersecurity**](#cybersecurity--safety-engineering) • [**CLI & Source**](#installation--quick-start)
+[**Download v2.0.0**](#download-standalone-executables) • [**Release Notes**](RELEASE_NOTES.md) • [**Visual Tour**](#visual-tour) • [**Cross-Platform Engine**](#cross-platform-support-windows--macos--linux) • [**Setup Installer & Updater**](#setup-installer--auto-updater) • [**Sequence DSL**](#sequence-dsl-reference) • [**Cybersecurity**](#cybersecurity--safety-engineering) • [**CLI & Source**](#installation--quick-start)
 
 </div>
 
@@ -25,7 +25,7 @@ Free, Open-Source (`GPL-3.0`), Cybersecurity-Hardened, and Native for Windows, m
 <div align="center">
   <img src="docs/screenshots/studio_mode.png" alt="KeyForge Studio Mode Obsidian and Mint Emerald Desktop Interface" width="100%" />
   <br />
-  <sub><b>Studio Mode (v1.6.1)</b> — Decluttered top utility header, <b>4-Card Hero Control Strip</b> (Profile, Engine Telemetry, Hotkeys &amp; Dry-Run, Delay &amp; Start CTA), <b>All Steps / Keys / Waits / Mouse</b> filter pills with <code>/</code> quick search, crisp non-truncated step cards, keyboard shortcuts (<code>Del</code> / <code>Ctrl+D</code> / <code>Space</code> / <code>Alt+↑/↓</code>), and compact <b>Mini HUD</b>.</sub>
+  <sub><b>Studio Mode</b> — Decluttered top utility header, <b>4-Card Hero Control Strip</b> (Profile, Engine Telemetry, Hotkeys &amp; Dry-Run, Delay &amp; Start CTA), <b>All Steps / Keys / Waits / Mouse</b> filter pills with <code>/</code> quick search, crisp non-truncated step cards, keyboard shortcuts (<code>Del</code> / <code>Ctrl+D</code> / <code>Space</code> / <code>Alt+↑/↓</code>), and compact <b>Mini HUD</b> — now powered by GPU-accelerated native Rust (<code>eframe</code> / <code>egui</code>).</sub>
 </div>
 
 ---
@@ -34,7 +34,7 @@ Free, Open-Source (`GPL-3.0`), Cybersecurity-Hardened, and Native for Windows, m
 
 ### Dual Workspaces: `Simple` & `Studio`
 
-KeyForge adapts smoothly from quick keyboard automation to full multi-step sequence engineering without forcing complex timelines onto everyday workflows — styled uniformly with deep charcoal-obsidian surfaces (`#090C10` / `#0E1319`), hairline `1px` borders, and a restrained Mint Emerald CTA (`#2EE59D`).
+KeyForge adapts smoothly from quick keyboard automation to full multi-step sequence engineering without forcing complex timelines onto everyday workflows — styled uniformly in `v2.0.0` with deep charcoal-obsidian surfaces (`#090C10` / `#0E1319`), hairline `1px` borders, and a restrained Mint Emerald CTA (`#2EE59D`).
 
 <table>
   <tr>
@@ -47,7 +47,7 @@ KeyForge adapts smoothly from quick keyboard automation to full multi-step seque
         <li><b>Two Synchronized Modes:</b> Toggle cleanly between <b>Simple</b> (Key Repeater &amp; Quick Sequence) and <b>Studio</b> (4-card hero strip + timeline) with live bidirectional profile, delay, and repeat-count sync.</li>
         <li><b>Click-to-Bind Key Capture &amp; Presets:</b> Click <b>Bind Key</b> to capture any physical key or modifier combo (e.g. <code>Ctrl+Shift+F</code> or <code>Cmd+C</code> on macOS), use speed presets (<code>25ms–500ms</code>), or save custom profiles via <b>+ Save Preset</b>.</li>
         <li><b>Fast Step Filtering &amp; Shortcuts:</b> Slice steps by <b>Keys</b>, <b>Waits</b>, or <b>Mouse</b>, press <code>/</code> to filter, and manage visible rows safely via <code>Del</code>, <code>Ctrl+D</code> / <code>⌘D</code>, <code>Space</code>, and <code>Alt+↑/↓</code>.</li>
-        <li><b>Low-Spec &amp; Low-RAM Optimized:</b> Pure <code>CustomTkinter</code> + <code>Pillow</code> UI with zero Chromium/WebView subprocess bloat, a warm 64-slot pooled timeline, 64px cached icons, adaptive idle polling, and dirty-checked telemetry (~42.5 MB Private RAM / ~0.78% CPU idle on Windows).</li>
+        <li><b>Native Rust Efficiency:</b> Rewritten 100% in compiled native Rust (<code>eframe</code> / <code>egui</code> + <code>glow</code>) with zero Python interpreter, zero Electron/WebView subprocesses, a <b>5.84 MB</b> standalone Windows executable (<code>6,124,032</code> bytes), and <b>0.065%</b> idle CPU on Windows (<code>142.13 MB</code> private OpenGL WGL context footprint).</li>
       </ul>
     </td>
   </tr>
@@ -67,7 +67,7 @@ KeyForge adapts smoothly from quick keyboard automation to full multi-step seque
       </p>
     </td>
     <td width="50%" valign="top" align="center">
-      <img src="docs/screenshots/setup_installer.png" alt="KeyForge v1.6.0 Setup Installer Wizard with Browse Button" width="90%" />
+      <img src="docs/screenshots/setup_installer.png" alt="KeyForge Setup Installer Wizard with Browse Button" width="90%" />
       <p align="left">
         <b>Cross-Platform Setup Installer &amp; Uninstaller</b><br />
         Install per-user without admin elevation (<code>%LOCALAPPDATA%\Programs\KeyForge</code> on Windows, <code>~/Applications/KeyForge</code> on macOS, <code>~/.local/share/KeyForge</code> on Linux) with native shortcuts / <code>.desktop</code> launchers while preserving user configs &amp; macros by default.
@@ -91,7 +91,7 @@ KeyForge adapts smoothly from quick keyboard automation to full multi-step seque
       <img src="docs/screenshots/updater_modal.png" alt="KeyForge SHA-256 Verified Software Update Sheet" width="88%" />
       <p align="left">
         <b>Startup Check &amp; SHA-256 Auto-Updater</b><br />
-        Checks GitHub Releases cleanly on launch, displays release notes and SHA-256 status, verifies downloads via <code>SHA256SUMS.txt</code> (<code>hmac.compare_digest</code>), and upgrades binaries in-place while keeping every setting and macro intact.
+        Checks GitHub Releases cleanly on launch, displays release notes and SHA-256 status, verifies downloads via <code>SHA256SUMS.txt</code> with constant-time <code>subtle::ConstantTimeEq</code>, and stages non-destructive upgrades while keeping every setting and macro intact.
       </p>
     </td>
   </tr>
@@ -109,7 +109,7 @@ KeyForge adapts smoothly from quick keyboard automation to full multi-step seque
 
 ## Download Standalone Executables
 
-Every tagged release is compiled, tested on Python 3.11–3.13 across all OS targets, and published by [GitHub Actions](https://github.com/efeartn/KeyForge/actions) alongside individual checksums and a combined [`SHA256SUMS.txt`](https://github.com/efeartn/KeyForge/releases/latest/download/SHA256SUMS.txt):
+Every tagged release is compiled with Cargo `--release`, checked with `rustfmt` and `clippy -D warnings`, tested across all OS targets by [GitHub Actions](https://github.com/efeartn/KeyForge/actions), and published alongside individual checksums and a combined [`SHA256SUMS.txt`](https://github.com/efeartn/KeyForge/releases/latest/download/SHA256SUMS.txt):
 
 | Operating System | Variant | Standalone Binary | Checksum Manifest |
 | :--- | :--- | :--- | :--- |
@@ -141,31 +141,31 @@ sha256sum -c KeyForge-Linux-x64.sha256.txt && chmod +x KeyForge-Linux-x64
 
 ## Cross-Platform Support (Windows · macOS · Linux)
 
-KeyForge injects live keyboard/mouse events, polls global hotkeys, and captures live input natively on every desktop OS using built-in `ctypes` bindings — requiring **zero external input-hook dependencies**:
+KeyForge injects live keyboard/mouse events, polls global hotkeys, and captures live input natively on every desktop OS directly via Rust FFI (`windows-sys`, `CoreGraphics` / `ApplicationServices`, and `libX11` / `libXtst`):
 
 | Platform | Native Input & Hotkey Engine | Permissions & Notes |
 | :--- | :--- | :--- |
-| **Windows 10 / 11** | `Win32InputBackend` (`user32.SendInput` 64-bit, `GetAsyncKeyState`) | Works immediately out of the box with `0x4B465247` self-filter signature |
-| **macOS (Apple Silicon / Intel)** | `MacOSInputBackend` (`CoreGraphics` `CGEventPost`, non-variadic scroll, `CGEventSourceKeyState`) | Grant **Accessibility** permission in *System Settings → Privacy & Security → Accessibility* for live injection & global hotkeys; supports `Cmd` / `Option` aliases and `⌘` shortcuts |
-| **Linux (`x86_64` / `arm64`)** | `LinuxX11InputBackend` (`libX11` + `libXtst`, thread-safe dedicated `Display*`, `XQueryKeymap`) | Works on X11 and XWayland windows (`libxtst6` required; pure Wayland compositors without XWayland fall back safely to Dry-Run Simulation with an actionable banner) |
+| **Windows 10 / 11** | `Win32InputBackend` (`src/engine/platform_win32.rs`: `SendInput`, `GetAsyncKeyState`) | Works immediately out of the box with `0x4B465247` self-filter signature |
+| **macOS (Apple Silicon / Intel)** | `MacOSInputBackend` (`src/engine/platform_macos.rs`: `CGEventPost`, non-variadic scroll, `CGEventSourceKeyState`) | Grant **Accessibility** permission in *System Settings → Privacy & Security → Accessibility* for live injection & global hotkeys; supports `Cmd` / `Option` aliases and `⌘` shortcuts |
+| **Linux (`x86_64` / `arm64`)** | `LinuxX11InputBackend` (`src/engine/platform_linux.rs`: `libX11` + `libXtst`, dedicated `Display*`, `XQueryKeymap`) | Works on X11 and XWayland windows (`libxtst6` required; isolated pure-Wayland sessions fall back safely to Dry-Run Simulation with guidance) |
 
 ---
 
 ## Setup Installer & Auto-Updater
 
 ### Safe Setup & Uninstaller (Preserves User Data by Default)
-- **Zero-Elevation Per-User Install**: Installs cleanly into your user folder (`%LOCALAPPDATA%\Programs\KeyForge\KeyForge.exe` on Windows, `~/Applications/KeyForge/KeyForge` on macOS, `~/.local/share/KeyForge/KeyForge` on Linux) with **Browse...** customization.
+- **Zero-Elevation Per-User Install**: Installs cleanly into your user folder (`%LOCALAPPDATA%\Programs\KeyForge\KeyForge.exe` on Windows, `~/Applications/KeyForge/KeyForge` on macOS, `~/.local/share/KeyForge/KeyForge` on Linux) with native folder picker (**Browse...** via `rfd`).
 - **Native Shortcuts & Registration**: Creates optional Desktop shortcuts and Windows Start Menu / Uninstall registry entries or Linux `.desktop` Application Menu launchers, and automatically sets `0755` executable permissions on POSIX.
-- **Uninstall Without Data Loss**: Running Uninstall removes binaries and shortcuts while leaving your configuration, custom presets, and active macro profile intact by default unless `--purge-data` is selected.
+- **Uninstall Without Data Loss**: Running Uninstall removes binaries and shortcuts while leaving your configuration, custom presets, and active macro profile intact by default unless `--purge-data` is selected, and includes host protection guards under test runners.
 - **Silent CLI Support**: Both Setup and Uninstall support headless flags (`--install --silent` and `--uninstall --silent [--purge-data]`).
 
-### Auto-Updater & Persistent Configuration
+### Auto-Updater & 100% `v1.x` Configuration Compatibility
 
-When you upgrade KeyForge from inside the app or launch a newer standalone binary, your hotkeys, UI mode, Key Repeater interval, start delay, custom presets, window geometry, and active macro profile stay completely intact.
+Upgrading directly from KeyForge `v1.x` (Python) to `v2.0.0` (Rust) preserves your existing settings, hotkeys, UI mode, Key Repeater interval, start delay, custom presets, window geometry, and signed `.kfmacro.json` macro profiles automatically — byte-for-byte compatible canonical SHA-256 verification included.
 
 - **Startup Release Check**: Background check on startup notifies you cleanly via a dismissible header banner and the **Updates** pill when a newer release exists on GitHub (can be toggled anytime with **Check for updates on startup**).
-- **Strict Transport & Hash Verification**: Enforces `HTTPS`-only GitHub redirects, matches portable binaries cleanly without confusing them for installers, streams downloads atomically with progress reporting, and rejects any download whose `SHA-256` fails constant-time comparison against `SHA256SUMS.txt` / `.sha256.txt`.
-- **Crash-Safe Config, Custom Presets & Profile Storage** (atomic `fsync` + `.bak` fallback; overridable via `KEYFORGE_CONFIG_DIR`):
+- **Strict Transport & Hash Verification**: Enforces `HTTPS`-only GitHub redirects, matches portable binaries cleanly without confusing them for installers, streams downloads atomically with progress reporting, rejects any download whose `SHA-256` fails constant-time comparison against `SHA256SUMS.txt` / `.sha256.txt`, and executes non-destructive staged hot-swap replacement (`$TargetExe.new` -> `.old` backup -> atomic promote).
+- **Crash-Safe Config, Custom Presets & Profile Storage** (atomic temp-write + `.bak` fallback; overridable via `KEYFORGE_CONFIG_DIR`):
 
 | Platform | Configuration Directory | Stored Files |
 | :--- | :--- | :--- |
@@ -177,11 +177,11 @@ When you upgrade KeyForge from inside the app or launch a newer standalone binar
 
 ## Why KeyForge?
 
-Many desktop macro tools force a trade-off between usability, transparency, and safety:
+Many desktop macro tools force a trade-off between usability, performance, and safety:
 
 | Feature / Guarantee | **KeyForge (`GPL-3.0`)** | **TinyTask** | **AutoHotkey** | **Paid Macro Tools** |
 | :--- | :---: | :---: | :---: | :---: |
-| **100% Free & Open Source** | ✅ Yes | ❌ Closed binary | ✅ Yes | ❌ Paywalls / Trials |
+| **100% Free, Native Rust & Open Source** | ✅ Yes (~5.8 MB single binary) | ❌ Closed binary | ✅ Yes | ❌ Paywalls / Bloat |
 | **Simple Key Repeater + Visual Studio** | ✅ Dual UI Modes | ❌ Record-only blob | ❌ Scripts only | ⚠️ Often split tiers |
 | **One-Line Sequence DSL Bar** | ✅ `Press E -> Wait 200ms -> Click` | ❌ No | ❌ Manual script | ❌ No |
 | **Humanized Random Jitter (`±ms`)** | ✅ Built into Wait steps | ❌ Fixed delays | ⚠️ Manual `Random()` | ❌ Rare |
@@ -218,10 +218,10 @@ Type or paste human-readable macro recipes directly into the **Sequence DSL** ba
 
 KeyForge is built with defensive local and supply-chain safeguards documented in [`SECURITY.md`](SECURITY.md):
 
-1. **Declarative JSON Profiles (Zero `eval` / `exec` / `pickle`)**: `.kfmacro.json` files validate strictly against allowlists, bounds, and types in [`keyforge/security/validator.py`](keyforge/security/validator.py), rejecting `NaN`/`Infinity`, boolean-as-integer confusion, path traversal, NTFS ADS (`:`), and reserved device names (`CON`, `NUL`, `COM1`).
-2. **Canonical `SHA-256` Signing**: Profiles embed an `integrity_sha256` digest verified via constant-time `hmac.compare_digest` in [`keyforge/security/integrity.py`](keyforge/security/integrity.py).
+1. **Declarative JSON Profiles (Zero `eval` / `exec` / Arbitrary Scripts)**: `.kfmacro.json` files validate strictly against allowlists, bounds, and types in [`src/security/validator.rs`](src/security/validator.rs), rejecting `NaN`/`Infinity`, boolean-as-integer confusion, path traversal, NTFS ADS (`:`), and reserved device names (`CON`, `NUL`, `COM1`).
+2. **Canonical `SHA-256` Signing**: Profiles embed an `integrity_sha256` digest computed via `sha2` and verified using constant-time `subtle::ConstantTimeEq` in [`src/security/integrity.rs`](src/security/integrity.rs) with full parity against `v1.x` profiles.
 3. **Anti-DoS Complexity Budgets**: Caps `MAX_PROFILE_FILE_BYTES = 1 MiB`, `MAX_TOTAL_STEPS = 5,000`, `MAX_NESTING_DEPTH = 5`, `MAX_EXPANDED_OPS_PER_CYCLE = 100,000`, plus a `5ms` minimum inter-cycle flood governor.
-4. **Built-In Static Security Auditor ([`keyforge/security/auditor.py`](keyforge/security/auditor.py))**:
+4. **Built-In Static Security Auditor ([`src/security/auditor.rs`](src/security/auditor.rs))**:
 
 | Rule Code | Severity | Security & Safety Check |
 | :--- | :--- | :--- |
@@ -237,15 +237,15 @@ KeyForge is built with defensive local and supply-chain safeguards documented in
 
 ```mermaid
 flowchart LR
-    UI["KeyForge GUI<br/>(Simple + Studio)"] --> DSL["Quick-Forge DSL<br/>(keyforge.models.dsl)"]
+    UI["KeyForge Native Rust GUI<br/>(eframe / egui + glow)"] --> DSL["Quick-Forge DSL<br/>(src/models/dsl.rs)"]
     UI --> SEC["Security Layer<br/>(Validator + SHA-256 + Auditor)"]
-    UI --> UPD["Auto-Updater + Config<br/>(updater.py + config.py)"]
-    UI --> EXEC["MacroExecutor<br/>(keyforge.engine.executor)"]
-    UI --> REC["MacroRecorder<br/>(keyforge.engine.recorder)"]
+    UI --> UPD["Auto-Updater + Config<br/>(src/updater.rs + src/config.rs)"]
+    UI --> EXEC["MacroExecutor<br/>(src/engine/executor.rs)"]
+    UI --> REC["MacroRecorder<br/>(src/engine/recorder.rs)"]
     HK["GlobalHotkeyManager<br/>(F6 Run / F7 Rec / F12 Panic)"] --> EXEC
     HK --> REC
     EXEC --> SAN["EmergencyInputSanitizer<br/>(Auto-Release Ledger)"]
-    SAN --> PLAT["Cross-Platform Backend Router<br/>(keyforge/engine/platform_input.py)"]
+    SAN --> PLAT["Cross-Platform Backend Router<br/>(src/engine/platform.rs)"]
     PLAT --> WIN32["Win32 SendInput<br/>(Windows)"]
     PLAT --> MAC["CoreGraphics CGEvent<br/>(macOS)"]
     PLAT --> X11["X11 / XTest<br/>(Linux)"]
@@ -254,92 +254,94 @@ flowchart LR
 
 ```text
 KeyForge/
-├── .github/workflows/ci.yml      # Multi-OS Test, Audit, PyInstaller Build & Release Pipeline
+├── .github/workflows/ci.yml      # Multi-OS Rust fmt, clippy, test & Release Pipeline
+├── assets/                       # Embedded Window & Installer Icons (icon.png, icon.ico)
 ├── docs/screenshots/             # README Desktop Interface & Dialog Screenshots
-├── keyforge/
-│   ├── assets/                   # Bundled App Icon Assets (icon.png, icon.ico)
+├── src/
 │   ├── engine/
-│   │   ├── backend.py            # InputBackend Protocol & DryRunBackend Simulator
-│   │   ├── executor.py           # Interruptible MacroExecutor, Sanitizer & Telemetry
-│   │   ├── hotkeys.py            # Adaptive Cross-Platform Global Hotkey Polling Thread
-│   │   ├── platform_input.py     # Native macOS CoreGraphics, Linux X11/XTest & Router
-│   │   ├── recorder.py           # Live Input Recorder with Tap Coalescing & Combo Filter
-│   │   └── win32_input.py        # 64-bit Win32 SendInput ctypes Backend
+│   │   ├── backend.rs            # InputBackend Trait, Marker & DryRunBackend Simulator
+│   │   ├── executor.rs           # Interruptible MacroExecutor, Sanitizer & Telemetry
+│   │   ├── hotkeys.rs            # Adaptive Cross-Platform Global Hotkey Polling Thread
+│   │   ├── platform.rs           # Platform Backend Factory (Win32 / macOS / X11)
+│   │   ├── platform_win32.rs     # Native 64-bit Win32 SendInput & GetAsyncKeyState
+│   │   ├── platform_macos.rs     # Native macOS CoreGraphics CGEvent & AX Trust Check
+│   │   ├── platform_linux.rs     # Native Linux libX11 + libXtst Input & Query Backend
+│   │   └── recorder.rs           # Live Input Recorder with Tap Coalescing & Combo Filter
 │   ├── models/
-│   │   ├── action.py             # MacroAction Dataclass, ActionType & Validation
-│   │   ├── dsl.py                # Sequence DSL Parser & Formatter
-│   │   ├── keymap.py             # Virtual-Key (VK), Scan-Code, Cmd/Option & Capture Registry
-│   │   └── profile.py            # MacroProfile & Built-In Presets
+│   │   ├── action.rs             # MacroAction Struct, ActionType & Bounds Validation
+│   │   ├── dsl.rs                # Sequence DSL Parser & Canonical Formatter
+│   │   ├── keymap.rs             # Virtual-Key (VK), Scan-Code & Cross-OS Key Registry
+│   │   └── profile.rs            # MacroProfile, RepeatMode & Built-In Starter Presets
 │   ├── security/
-│   │   ├── auditor.py            # Static Security & Safety Analyzer (KF-SEC-001..005)
-│   │   ├── integrity.py          # Canonical SHA-256 Signing & Constant-Time Verification
-│   │   └── validator.py          # Allowlist Schema, Path & Complexity Budget Validator
+│   │   ├── auditor.rs            # Static Security & Safety Analyzer (KF-SEC-001..005)
+│   │   ├── integrity.rs          # Canonical SHA-256 Signing & Constant-Time Verification
+│   │   └── validator.rs          # Allowlist Schema, Path & Complexity Budget Validator
 │   ├── ui/
-│   │   ├── app.py                # Dual Simple/Studio Obsidian Desktop GUI & 4-Card Hero
-│   │   ├── installer_dialog.py   # Cross-Platform Setup & Uninstaller Wizard with Browse...
-│   │   ├── mini_hud.py           # Always-on-Top Floating Compact Control Pill
-│   │   ├── step_dialog.py        # Modal Step Inspector with Bind Key & Pick XY Capture
-│   │   ├── theme.py              # Obsidian/Emerald Palette, HiDPI Scaling & 64px Icon Cache
-│   │   └── update_dialog.py      # SHA-256 Verified GitHub Releases Update Sheet
-│   ├── config.py                 # Crash-Safe Config, Custom Presets & Active Profile Backup
-│   ├── installer.py              # Per-User Installer, Desktop Launchers & Registry Manager
-│   ├── main.py                   # Setup Wizard, CLI & Desktop GUI Entry Point
-│   └── updater.py                # SemVer Client, SHA-256 Verifier & Atomic Hot-Swapper
-├── RELEASE_NOTES.md              # Latest Release Notes (Published to GitHub Releases)
-├── scripts/build_exe.py          # Cross-Platform PyInstaller Compiler + SHA-256 Generator
-└── tests/                        # Unit, Security, Cross-Platform, Updater, CLI & UI Tests
+│   │   ├── app.rs                # Dual Simple/Studio Obsidian Desktop GUI & 4-Card Hero
+│   │   ├── installer_window.rs   # Cross-Platform Setup & Uninstaller Wizard with Browse...
+│   │   ├── mini_hud.rs           # Always-on-Top Floating Compact Control Pill
+│   │   ├── step_dialog.rs        # Modal Step Inspector with Bind Key & Pick XY Capture
+│   │   ├── theme.rs              # Obsidian/Emerald Palette & Native Window Styling
+│   │   └── update_dialog.rs      # SHA-256 Verified GitHub Releases Update Sheet
+│   ├── config.rs                 # Crash-Safe Config, Custom Presets & Active Profile Backup
+│   ├── installer.rs              # Per-User Installer, Desktop Launchers & Registry Manager
+│   ├── lib.rs                    # Library Crate Root (VERSION = "2.0.0")
+│   ├── main.rs                   # Setup Wizard, CLI & Desktop GUI Entry Point
+│   └── updater.rs                # SemVer Client, SHA-256 Verifier & Non-Destructive Hot-Swapper
+├── tests/integration_tests.rs    # Full Rust Integration, SHA-256 Parity & CLI Smoke Suite
+├── build.rs                      # Windows MSVC Resource Embedding
+├── Cargo.toml                    # Dependencies & Size/Speed Optimized Release Profile
+└── RELEASE_NOTES.md              # Latest Release Notes (Published to GitHub Releases)
 ```
 
 ---
 
 ## Installation & Quick Start
 
-### Run from Source
+### Run from Source (Rust Toolchain)
 
 ```bash
 git clone https://github.com/efeartn/KeyForge.git
 cd KeyForge
-pip install -e ".[dev]"
 
-# Launch KeyForge Desktop GUI
-python -m keyforge
+# Launch KeyForge Desktop GUI (release optimized)
+cargo run --release
 ```
 
 ### Command-Line Interface (CLI)
 
 ```bash
 # Check installed version
-python -m keyforge --version
+cargo run -- --version
 
 # Simulate a Quick-Forge recipe in safe Dry-Run mode (no live OS inputs)
-python -m keyforge --expr "Press E -> Wait 200ms -> Click -> Press 1" --repeat 3 --dry-run
+cargo run -- --expr "Press E -> Wait 200ms -> Click -> Press 1" --repeat 3 --dry-run
 
 # Export the signed starter profile
-python -m keyforge --export-default my_combo.kfmacro.json
+cargo run -- --export-default my_combo.kfmacro.json
 
 # Run the static security & safety audit on a saved profile
-python -m keyforge --profile my_combo.kfmacro.json --audit
+cargo run -- --profile my_combo.kfmacro.json --audit
 
 # Execute a saved profile with live OS injection
-python -m keyforge --profile my_combo.kfmacro.json
+cargo run -- --profile my_combo.kfmacro.json
 
 # Launch Setup / Install / Uninstall workflows
-python -m keyforge --setup
-python -m keyforge --install --silent
-python -m keyforge --uninstall --silent
+cargo run -- --setup
+cargo run -- --install --silent
+cargo run -- --uninstall --silent
 ```
 
-### Compile a Standalone Binary & Run Tests
+### Compile Standalone Binary & Run Tests
 
 ```bash
-# Build single-file executable + .sha256.txt manifest under dist/
-pip install pyinstaller
-python scripts/build_exe.py
+# Build single-file release executable under target/release/
+cargo build --release --locked
 
-# Run test suite, coverage, lint & formatting checks
-python -m pytest --cov=keyforge --cov-report=term-missing
-python -m ruff check keyforge tests scripts
-python -m ruff format --check keyforge tests scripts
+# Run formatting, clippy (-D warnings), and full integration tests
+cargo fmt --all -- --check
+cargo clippy --all-targets -- -D warnings
+cargo test --all-targets
 ```
 
 ---
