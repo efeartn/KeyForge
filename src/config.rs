@@ -32,10 +32,12 @@ pub fn is_test_binary_env() -> bool {
     }
     if let Ok(exe) = std::env::current_exe() {
         let norm = exe.to_string_lossy().replace('\\', "/");
-        if norm.contains("/target/")
-            && (norm.contains("/deps/")
-                || (norm.contains("/build/") && norm.contains("/out/"))
-                || norm.contains("/integration_tests"))
+        let stem = exe.file_stem().and_then(|s| s.to_str()).unwrap_or_default();
+        if stem.starts_with("integration_tests")
+            || (norm.contains("/deps/") && norm.contains("/target/"))
+            || (norm.contains("/build/")
+                && norm.contains("/out/")
+                && !stem.eq_ignore_ascii_case("keyforge"))
         {
             return true;
         }
