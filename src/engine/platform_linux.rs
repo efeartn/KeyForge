@@ -356,7 +356,7 @@ impl LinuxX11InputBackend {
             }
             for &vk in key_vks {
                 let kc = api.resolve_keycode(vk) as usize;
-                let down = if kc > 0 && kc < 256 {
+                let down = if (1..256).contains(&kc) {
                     (buf[kc >> 3] & (1 << (kc & 7))) != 0
                 } else {
                     false

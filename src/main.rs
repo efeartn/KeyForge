@@ -84,11 +84,11 @@ struct Cli {
     install_dir: Option<PathBuf>,
 }
 
+#[cfg(target_os = "windows")]
 fn attach_parent_console_if_needed(has_cli_args: bool) {
     if !has_cli_args {
         return;
     }
-    #[cfg(target_os = "windows")]
     unsafe {
         use windows_sys::Win32::System::Console::{
             AttachConsole, GetStdHandle, ATTACH_PARENT_PROCESS, STD_OUTPUT_HANDLE,
@@ -99,6 +99,9 @@ fn attach_parent_console_if_needed(has_cli_args: bool) {
         }
     }
 }
+
+#[cfg(not(target_os = "windows"))]
+fn attach_parent_console_if_needed(_has_cli_args: bool) {}
 
 fn run_cli_mode(cli: &Cli) -> i32 {
     let mut profile = if let Some(ref path) = cli.profile {

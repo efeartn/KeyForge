@@ -372,19 +372,20 @@ fn register_windows_uninstaller(target_dir: &Path, installed_exe: &Path) -> bool
     }
 }
 
+#[cfg(target_os = "windows")]
 fn unregister_windows_uninstaller() {
     if is_test_binary_env() {
         return;
     }
-    #[cfg(target_os = "windows")]
-    {
-        use windows_sys::Win32::System::Registry::{RegDeleteKeyW, HKEY_CURRENT_USER};
-        let subkey = to_wide_null(UNINSTALL_REG_SUBKEY);
-        unsafe {
-            let _ = RegDeleteKeyW(HKEY_CURRENT_USER, subkey.as_ptr());
-        }
+    use windows_sys::Win32::System::Registry::{RegDeleteKeyW, HKEY_CURRENT_USER};
+    let subkey = to_wide_null(UNINSTALL_REG_SUBKEY);
+    unsafe {
+        let _ = RegDeleteKeyW(HKEY_CURRENT_USER, subkey.as_ptr());
     }
 }
+
+#[cfg(not(target_os = "windows"))]
+fn unregister_windows_uninstaller() {}
 
 #[cfg(unix)]
 fn create_macos_shortcut(shortcut_path: &Path, target_exe: &Path) -> bool {
