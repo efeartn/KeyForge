@@ -1,10 +1,10 @@
 <div align="center">
 
-<img src="assets/icon.png" alt="kTap Studio Logo" width="112" height="112" />
+<img src="assets/icon.png" alt="kTap Logo" width="108" height="108" />
 
 # kTap
 
-**Precision Native Rust Keyboard & Macro Sequence Studio & Live Input Recorder.**  
+**Minimalist Native Rust Keyboard & Macro Sequence Studio and Live Input Recorder.**  
 Free, Open-Source (`GPL-3.0-or-later`), Cybersecurity-Hardened, Obsidian & Mint Emerald GUI, and Native for Windows, macOS & Linux — with Zero Python Runtime or WebView Bloat.
 
 [![CI & Release Compiler](https://github.com/efeartn/kTap/actions/workflows/ci.yml/badge.svg)](https://github.com/efeartn/kTap/actions/workflows/ci.yml)
@@ -14,7 +14,7 @@ Free, Open-Source (`GPL-3.0-or-later`), Cybersecurity-Hardened, Obsidian & Mint 
 [![Security: SHA-256 Signed + Static Auditor](https://img.shields.io/badge/Security-SHA--256%20Verified%20%2B%20Static%20Auditor-10B981)](SECURITY.md)
 [![License: GPL-3.0](https://img.shields.io/badge/License-GPL--3.0-8B5CF6.svg)](LICENSE)
 
-[![Download v3.0.0 "Pulse"](https://img.shields.io/badge/Latest-v3.0.0%20%22Pulse%22-2EE59D)](#download-standalone-executables) • [**Release Notes**](RELEASE_NOTES.md) • [**Visual Tour**](#visual-tour) • [**Cross-Platform Engine**](#cross-platform-support-windows--macos--linux) • [**Setup Installer & Updater**](#setup-installer--auto-updater) • [**Release Codenames**](#release-codenames) • [**Sequence DSL**](#sequence-dsl-reference) • [**Cybersecurity**](#cybersecurity--safety-engineering) • [**CLI & Source**](#installation--quick-start)
+[![Download 1.0.0](https://img.shields.io/badge/Version-1.0.0-2EE59D)](#download-standalone-executables) • [**Release Notes**](RELEASE_NOTES.md) • [**Visual Tour**](#visual-tour) • [**Cross-Platform Engine**](#cross-platform-support-windows--macos--linux) • [**Setup & Updater**](#setup-installer--auto-updater) • [**Sequence DSL**](#sequence-dsl-reference) • [**Cybersecurity**](#cybersecurity--safety-engineering) • [**CLI & Source**](#installation--quick-start)
 
 </div>
 
@@ -23,9 +23,9 @@ Free, Open-Source (`GPL-3.0-or-later`), Cybersecurity-Hardened, Obsidian & Mint 
 ## Studio Workspace at a Glance
 
 <div align="center">
-  <img src="docs/screenshots/studio_mode.png" alt="kTap Studio Mode Obsidian and Mint Emerald Desktop Interface" width="100%" />
+  <img src="docs/screenshots/studio_mode.png" alt="kTap 1.0.0 Studio Mode Desktop Interface" width="100%" />
   <br />
-  <sub><b>Studio Mode</b> — Decluttered top utility header, <b>4-Card Hero Control Strip</b> (Profile, Engine Telemetry, Hotkeys &amp; Dry-Run, Delay &amp; Start CTA), <b>All Steps / Keys / Waits / Mouse</b> filter pills with <code>/</code> quick search &amp; <code>Esc</code> / <code>✕</code> clear, disabled-aware batch toolbar with tooltips, keyboard shortcuts (<code>Del</code> / <code>Ctrl+D</code> / <code>Space</code> / <code>Alt+↑/↓</code>), and compact <b>Mini HUD</b> — powered by GPU-accelerated native Rust (<code>eframe</code> / <code>egui</code>).</sub>
+  <sub><b>kTap 1.0.0 Studio Mode</b> — Minimalist Obsidian &amp; Mint Emerald workspace featuring the <b>4-Card Hero Control Strip</b> (Profile, Engine Telemetry, Hotkeys &amp; Dry-Run, Start Delay &amp; CTA), <b>All Steps / Keys / Waits / Mouse</b> filter pills with <code>/</code> quick search &amp; <code>Esc</code> / <code>×</code> clear, disabled-aware batch toolbar, one-line <b>DSL</b> editor, step cards with keyboard shortcuts (<code>Del</code> / <code>Ctrl+D</code> / <code>Space</code> / <code>Alt+Up/Dn</code>), and right-hand <b>Loop / Recorder / Security / Console</b> inspector.</sub>
 </div>
 
 ---
@@ -34,20 +34,20 @@ Free, Open-Source (`GPL-3.0-or-later`), Cybersecurity-Hardened, Obsidian & Mint 
 
 ### Dual Workspaces: `Simple` & `Studio`
 
-kTap adapts smoothly from quick keyboard automation to full multi-step sequence engineering without forcing complex timelines onto everyday workflows — styled uniformly with deep charcoal-obsidian surfaces (`#090C10` / `#0E1319`), hairline `1px` borders, and a restrained Mint Emerald CTA (`#2EE59D`).
+kTap adapts cleanly from everyday key repeating to full multi-step macro engineering without forcing complex timelines onto simple tasks — styled in deep charcoal-obsidian (`#090C10` / `#0E1319`), hairline `1px` borders, and a restrained Mint Emerald primary CTA (`#2EE59D`).
 
 <table>
   <tr>
     <td width="58%" valign="top">
-      <img src="docs/screenshots/simple_mode.png" alt="kTap Simple Mode Key Repeater and Control Center" width="100%" />
+      <img src="docs/screenshots/simple_mode.png" alt="kTap 1.0.0 Simple Mode Key Repeater and Control Center" width="100%" />
     </td>
     <td width="42%" valign="top">
       <h3>Everyday Keyboard Automation</h3>
       <ul>
-        <li><b>Two Synchronized Modes:</b> Toggle cleanly between <b>Simple</b> (Key Repeater &amp; Quick Sequence) and <b>Studio</b> (4-card hero strip + timeline) with live bidirectional profile, delay, and repeat-count sync.</li>
-        <li><b>Click-to-Bind Key Capture &amp; Presets:</b> Click <b>Bind Key</b> to capture any physical key or modifier combo (e.g. <code>Ctrl+Shift+F</code> or <code>Cmd+C</code> on macOS), use highlighted speed presets (<code>25ms–500ms</code>), or save custom profiles via <b>+ Save Preset</b>.</li>
-        <li><b>Fast Step Filtering &amp; Shortcuts:</b> Slice steps by <b>Keys</b>, <b>Waits</b>, or <b>Mouse</b>, press <code>/</code> to filter (<code>Esc</code> or <code>✕</code> to clear), and manage visible rows safely via <code>Del</code>, <code>Ctrl+D</code> / <code>⌘D</code>, <code>Space</code>, and <code>Alt+↑/↓</code>.</li>
-        <li><b>Native Rust Efficiency:</b> Compiled 100% in native Rust (<code>eframe</code> / <code>egui</code> + <code>glow</code>) with pre-compiled execution plans, cached metrics, zero Python interpreter or WebView subprocesses, a <b>5.58 MB</b> standalone Windows executable (<code>5,847,552</code> bytes), and <b>0%</b> idle CPU on Windows (<code>143.16 MB</code> private / <code>149.43 MB</code> working set OpenGL context).</li>
+        <li><b>Two Synchronized Modes:</b> Switch seamlessly between <b>Simple</b> (Key Repeater &amp; Quick Sequence) and <b>Studio</b> (4-card hero strip + timeline) with live bidirectional profile, timing, and repeat-mode sync.</li>
+        <li><b>Click-to-Bind Key Capture &amp; Speed Presets:</b> Click <b>Bind Key</b> to capture any physical key or modifier combo (e.g. <code>Ctrl+Shift+F</code> or <code>Cmd+C</code>), pick highlighted speed presets (<code>25ms–500ms</code>), or toggle humanized timing variance (<code>±10%</code>).</li>
+        <li><b>Fast Step Filtering &amp; Shortcuts:</b> Filter by <b>Keys</b>, <b>Waits</b>, or <b>Mouse</b>, press <code>/</code> to search (<code>Esc</code> or <code>×</code> to clear), and edit visible rows safely with <code>Del</code>, <code>Ctrl+D</code> / <code>⌘D</code>, <code>Space</code>, and <code>Alt+Up/Dn</code>.</li>
+        <li><b>Native Rust Performance:</b> Compiled 100% in native Rust (<code>eframe</code> / <code>egui</code> + <code>glow</code>) with pre-compiled execution plans, cached metrics, zero Python or WebView bloat, and a <b>5.58 MB</b> standalone Windows x64 executable (<code>5,848,576</code> bytes).</li>
       </ul>
     </td>
   </tr>
@@ -58,40 +58,40 @@ kTap adapts smoothly from quick keyboard automation to full multi-step sequence 
 <table>
   <tr>
     <td width="50%" valign="top" align="center">
-      <br />
-      <img src="docs/screenshots/mini_hud.png" alt="kTap Always-on-Top Compact Floating Mini-HUD Pill" width="90%" />
+      <br /><br />
+      <img src="docs/screenshots/mini_hud.png" alt="kTap 1.0.0 Always-on-Top Compact Floating Mini-HUD Pill" width="90%" />
       <br /><br />
       <p align="left">
         <b>Compact Always-on-Top Mini-HUD</b><br />
-        Click <b>Mini HUD</b> in the header bar to collapse kTap into a slim floating control pill that stays above games or desktop workflows on Windows, macOS Retina, and Linux with live cycle telemetry, Start/Stop (<code>F6</code>), Panic (<code>F12</code>), and one-click <b>Expand</b>.
+        Click <b>Mini HUD</b> in the top bar to collapse kTap into a slim floating control pill that stays above games or desktop apps on Windows, macOS, and Linux with live cycle telemetry, Start/Stop (<code>F6</code>), Panic (<code>F12</code>), and one-click <b>Expand</b>.
       </p>
     </td>
     <td width="50%" valign="top" align="center">
-      <img src="docs/screenshots/setup_installer.png" alt="kTap Setup Installer Wizard with Browse Button" width="90%" />
+      <img src="docs/screenshots/setup_installer.png" alt="kTap 1.0.0 Setup Installer Wizard" width="90%" />
       <p align="left">
         <b>Cross-Platform Setup Installer &amp; Uninstaller</b><br />
-        Install per-user without admin elevation (<code>%LOCALAPPDATA%\Programs\kTap</code> on Windows, <code>~/Applications/kTap</code> on macOS, <code>~/.local/share/kTap</code> on Linux) with native shortcuts / <code>.desktop</code> launchers while preserving user configs &amp; macros by default.
+        Install per-user without admin elevation (<code>%LOCALAPPDATA%\Programs\kTap</code> on Windows, <code>~/Applications/kTap</code> on macOS, <code>~/.local/share/kTap</code> on Linux) with a native <b>Browse...</b> folder picker, Desktop/Start Menu shortcuts or <code>.desktop</code> launchers, and a config-preserving Uninstaller.
       </p>
     </td>
   </tr>
 </table>
 
-### Modal Step Editor & Cryptographic In-App Updater
+### Modal Step Inspector & Cryptographic In-App Updater
 
 <table>
   <tr>
     <td width="50%" valign="top" align="center">
-      <img src="docs/screenshots/step_inspector.png" alt="kTap Modal Action Step Editor with Bind Key Capture" width="92%" />
+      <img src="docs/screenshots/step_inspector.png" alt="kTap 1.0.0 Modal Action Step Editor" width="94%" />
       <p align="left">
         <b>Precision Step Inspector</b><br />
-        Double-click any step (or click <code>Edit</code>) to configure readable action modes, capture keys directly with <b>Bind Key</b>, build nested <code>Repeat</code> loops, or capture live screen coordinates with <b>Pick XY</b>.
+        Double-click any step (or click <code>Edit</code>) to configure key presses, waits with jitter, mouse clicks/moves/scrolls, or nested <code>Repeat</code> blocks, with direct <b>Bind Key</b> capture and live screen <b>Pick XY</b> coordinate picking.
       </p>
     </td>
     <td width="50%" valign="top" align="center">
-      <img src="docs/screenshots/updater_modal.png" alt="kTap SHA-256 Verified Software Update Sheet" width="88%" />
+      <img src="docs/screenshots/updater_modal.png" alt="kTap 1.0.0 SHA-256 Verified Software Update Sheet" width="94%" />
       <p align="left">
         <b>Startup Check &amp; SHA-256 Auto-Updater</b><br />
-        Checks GitHub Releases cleanly on launch, displays release notes and SHA-256 status, verifies downloads via <code>SHA256SUMS.txt</code> with constant-time <code>subtle::ConstantTimeEq</code>, and stages non-destructive upgrades while keeping every setting and macro intact.
+        Checks GitHub Releases over HTTPS on launch, displays release notes and SHA-256 status, verifies downloads against <code>SHA256SUMS.txt</code> with constant-time <code>subtle::ConstantTimeEq</code>, and applies non-destructive staged upgrades while preserving every config and macro.
       </p>
     </td>
   </tr>
@@ -100,7 +100,7 @@ kTap adapts smoothly from quick keyboard automation to full multi-step sequence 
 ### Built-In Static Security Audit & Integrity Verification
 
 <div align="center">
-  <img src="docs/screenshots/security_audit.png" alt="kTap Static Security Audit Tab and SHA-256 Digest" width="94%" />
+  <img src="docs/screenshots/security_audit.png" alt="kTap 1.0.0 Security Inspector Tab and SHA-256 Digest" width="96%" />
   <br />
   <sub><b>Live Security Inspector Tab</b> — Displays the active profile's canonical <code>SHA-256</code> integrity digest, complexity budget counters, and real-time <code>KT-SEC-001..005</code> static safety checks.</sub>
 </div>
@@ -109,7 +109,7 @@ kTap adapts smoothly from quick keyboard automation to full multi-step sequence 
 
 ## Download Standalone Executables
 
-Every tagged release is compiled with Cargo `--release`, checked with `rustfmt` and `clippy -D warnings`, tested across all OS targets by [GitHub Actions](https://github.com/efeartn/kTap/actions), and published alongside individual checksums and a combined [`SHA256SUMS.txt`](https://github.com/efeartn/kTap/releases/latest/download/SHA256SUMS.txt):
+Every release is compiled with Cargo `--release --locked`, verified with `rustfmt`, `clippy -D warnings`, and cross-platform integration tests on [GitHub Actions](https://github.com/efeartn/kTap/actions), and published with individual checksums plus a combined [`SHA256SUMS.txt`](https://github.com/efeartn/kTap/releases/latest/download/SHA256SUMS.txt):
 
 | Operating System | Variant | Standalone Binary | Checksum Manifest |
 | :--- | :--- | :--- | :--- |
@@ -141,51 +141,27 @@ sha256sum -c kTap-Linux-x64.sha256.txt && chmod +x kTap-Linux-x64
 
 ## Cross-Platform Support (Windows · macOS · Linux)
 
-kTap injects live keyboard/mouse events, polls global hotkeys, and captures live input natively on every desktop OS directly via Rust FFI (`windows-sys`, `CoreGraphics` / `ApplicationServices`, `/dev/uinput`, and `libX11` / `libXtst`):
+kTap injects live keyboard and mouse events, polls global hotkeys, and captures live input natively on every desktop OS directly via Rust FFI (`windows-sys`, `CoreGraphics` / `ApplicationServices`, Linux `/dev/uinput` + `evdev`, and `libX11` / `libXtst`):
 
 | Platform | Native Input & Hotkey Engine | Permissions & Notes |
 | :--- | :--- | :--- |
 | **Windows 10 / 11** | `Win32InputBackend` (`src/engine/platform_win32.rs`: `SendInput`, `GetAsyncKeyState`) | Works immediately out of the box with `0x4B544150` (`"KTAP"`) self-filter signature |
 | **macOS (Apple Silicon / Intel)** | `MacOSInputBackend` (`src/engine/platform_macos.rs`: `CGEventPost`, non-variadic scroll, `CGEventSourceKeyState`) | Grant **Accessibility** permission in *System Settings → Privacy & Security → Accessibility* for live injection & global hotkeys; supports `Cmd` / `Option` aliases and `⌘` shortcuts |
-| **Linux (`x86_64` / `arm64`) — Wayland & X11** | `LinuxWaylandUinputBackend` (`src/engine/platform_linux_wayland.rs`: `/dev/uinput` + cached `evdev` polling) + `LinuxX11InputBackend` (`src/engine/platform_linux.rs`: `libX11` + `libXtst`) | Native injection & global hotkeys on Wayland compositors (GNOME, KDE, Sway, Hyprland) via `/dev/uinput` + automatic `XWayland` / `X11` fallback. Run `ktap --wayland-setup` (or click **Copy Setup Cmd** in-app) to grant `/dev/uinput` permissions without running as root. |
-
----
-
-## Release Codenames
-
-Git tags stay clean SemVer (`vX.Y.Z`) for strict auto-updater compatibility, while GitHub Releases and kTap's in-app/CLI chrome sync cleanly to each release's codename:
-
-| Version | Brand | Codename | Milestone |
-| :--- | :--- | :--- | :--- |
-| **`v3.0.0`** | **kTap** | **Pulse** | Full kTap evolution, pre-compiled executor plans, cached `evdev`/UI metrics, legacy auto-migration & UI polish |
-| **`v2.1.0`** | KeyForge | **Waystone** | Minimalist geometric icon, native Linux Wayland `uinput`/`evdev` backend, UI craft polish & Node 24 CI |
-| **`v2.0.0`** | KeyForge | **Ironclad** | Complete pure native Rust (`eframe`/`egui` + FFI) rewrite |
-| **`v1.6.1`** | KeyForge | **Shield** | Non-destructive Windows staged hot-swap & host shortcut protection |
-| **`v1.6.0`** | KeyForge | **Alloy** | Cross-platform macOS CoreGraphics & Linux X11/XTest engines |
-| **`v1.5.0`** | KeyForge | **Obsidian** | Obsidian & Mint Emerald UI overhaul + 4-Card Hero Strip |
-| **`v1.4.0`** | KeyForge | **Temper** | Craft UI interactive key capture & timeline shortcuts |
-| **`v1.3.0`** | KeyForge | **Quench** | Setup Installer wizard, floating Mini HUD & custom presets |
-| **`v1.2.0`** | KeyForge | **Carbon** | Apple minimalist surface pass, SHA-256 updater & atomic config |
-| **`v1.1.0`** | KeyForge | **Titanium** | GPL-3.0 open-source license & security hardening |
-| **`v1.0.0`** | KeyForge | **Ignition** | Initial public macro studio & auto-clicker release |
+| **Linux (`x86_64` / `arm64`) — Wayland & X11** | `LinuxWaylandUinputBackend` (`src/engine/platform_linux_wayland.rs`: `/dev/uinput` + cached `evdev` polling) + `LinuxX11InputBackend` (`src/engine/platform_linux.rs`: `libX11` + `libXtst`) | Native injection & global hotkeys on Wayland compositors (GNOME, KDE, Sway, Hyprland) via `/dev/uinput` with automatic `XWayland` / `X11` fallback. Run `ktap --wayland-setup` (or click **Copy Setup Cmd** in-app) to grant `/dev/uinput` access without running as root. |
 
 ---
 
 ## Setup Installer & Auto-Updater
 
 ### Safe Setup & Uninstaller (Preserves User Data by Default)
-- **Zero-Elevation Per-User Install**: Installs cleanly into your user folder (`%LOCALAPPDATA%\Programs\kTap\kTap.exe` on Windows, `~/Applications/kTap/kTap` on macOS, `~/.local/share/kTap/kTap` on Linux) with native folder picker (**Browse...** via `rfd`).
-- **Native Shortcuts & Registration**: Creates optional Desktop shortcuts and Windows Start Menu / Uninstall registry entries or Linux `.desktop` Application Menu launchers, and automatically sets `0755` executable permissions on POSIX.
-- **Uninstall Without Data Loss**: Running Uninstall removes binaries and shortcuts while leaving your configuration, custom presets, and active macro profile intact by default unless `--purge-data` is selected, and includes host protection guards under test runners.
-- **Silent CLI Support**: Both Setup and Uninstall support headless flags (`--install --silent` and `--uninstall --silent [--purge-data]`).
+- **Zero-Elevation Per-User Install**: Installs cleanly into `%LOCALAPPDATA%\Programs\kTap\kTap.exe` on Windows, `~/Applications/kTap/kTap` on macOS, or `~/.local/share/kTap/kTap` on Linux with a native folder picker (**Browse...**).
+- **Native Shortcuts & Registration**: Creates optional Desktop shortcuts and Windows Start Menu / Uninstall registry entries or Linux `.desktop` Application Menu launchers, setting `0755` permissions on POSIX.
+- **Uninstall Without Data Loss**: Removing kTap deletes binaries and shortcuts while keeping your config, custom presets, and active macro profile intact unless `--purge-data` is passed.
+- **Silent CLI Support**: Supports headless `--install --silent` and `--uninstall --silent [--purge-data]`.
 
-### Auto-Updater & Automatic Legacy `KeyForge` Config Migration
-
-Upgrading from legacy `KeyForge` (`v1.x`–`v2.1.0`) to `kTap v3.0.0 "Pulse"` preserves every setting automatically: on first launch, when your `kTap` config directory does not yet exist, kTap copies `config.json`, `active_profile.kfmacro.json` (converted to `active_profile.ktap.json`), and custom `presets/` non-destructively from your legacy `KeyForge` folder, and natively verifies both `.ktap.json` (`ktap-v1`) and `.kfmacro.json` (`kfmacro-v1`) signed envelopes.
-
-- **Startup Release Check**: Background check on startup notifies you cleanly via a dismissible header banner and the **Updates** pill when a newer release exists on GitHub (can be toggled anytime with **Check for updates on startup**).
-- **Strict Transport & Hash Verification**: Enforces `HTTPS`-only GitHub redirects, matches portable binaries cleanly without confusing them for installers, streams downloads atomically with progress reporting, rejects any download whose `SHA-256` fails constant-time comparison against `SHA256SUMS.txt` / `.sha256.txt`, and executes non-destructive staged hot-swap replacement (`$TargetExe.new` -> `.old` backup -> atomic promote).
-- **Crash-Safe Config, Custom Presets & Profile Storage** (atomic temp-write + `.bak` fallback; overridable via `KTAP_CONFIG_DIR`):
+### Verified Auto-Updater & Atomic Config Storage
+- **HTTPS + SHA-256 Enforcement**: Rejects insecure HTTP redirects, verifies downloads in constant time (`subtle::ConstantTimeEq`) against `SHA256SUMS.txt` / `.sha256.txt`, and executes non-destructive staged hot-swap replacement (`$TargetExe.new` -> `.old` backup -> atomic promote).
+- **Crash-Safe Config & Presets**: Atomic temp-write with `.bak` recovery (overridable via `KTAP_CONFIG_DIR`). If you previously used KeyForge, kTap automatically migrates existing configs and continues verifying legacy `.kfmacro.json` files alongside `.ktap.json`.
 
 | Platform | Configuration Directory | Stored Files |
 | :--- | :--- | :--- |
@@ -197,11 +173,9 @@ Upgrading from legacy `KeyForge` (`v1.x`–`v2.1.0`) to `kTap v3.0.0 "Pulse"` pr
 
 ## Why kTap?
 
-Many desktop macro tools force a trade-off between usability, performance, and safety:
-
 | Feature / Guarantee | **kTap (`GPL-3.0`)** | **TinyTask** | **AutoHotkey** | **Paid Macro Tools** |
 | :--- | :---: | :---: | :---: | :---: |
-| **100% Free, Native Rust & Open Source** | ✅ Yes (`~5.58 MB` single binary) | ❌ Closed binary | ✅ Yes | ❌ Paywalls / Bloat |
+| **100% Free, Native Rust & Open Source** | ✅ Yes (`5.58 MB` single binary) | ❌ Closed binary | ✅ Yes | ❌ Paywalls / Bloat |
 | **Simple Key Repeater + Visual Studio** | ✅ Dual UI Modes | ❌ Record-only blob | ❌ Scripts only | ⚠️ Often split tiers |
 | **One-Line Sequence DSL Bar** | ✅ `Press E -> Wait 200ms -> Click` | ❌ No | ❌ Manual script | ❌ No |
 | **Humanized Random Jitter (`±ms`)** | ✅ Built into Wait steps | ❌ Fixed delays | ⚠️ Manual `Random()` | ❌ Rare |
@@ -214,7 +188,7 @@ Many desktop macro tools force a trade-off between usability, performance, and s
 
 ## Sequence DSL Reference
 
-Type or paste human-readable macro recipes directly into the **Sequence DSL** bar and press `Enter` (or click **Replace** / **+ Append**):
+Type or paste human-readable macro recipes directly into the **DSL** bar and press `Enter` (or click **Replace** / **+ Append**):
 
 | Action | Sequence DSL Syntax Examples | Description |
 | :--- | :--- | :--- |
@@ -229,8 +203,8 @@ Type or paste human-readable macro recipes directly into the **Sequence DSL** ba
 
 ### Live Input Recorder (`F7`) & Hardware Panic Kill-Switch (`F12`)
 
-- **Live Recorder (`F7`)**: Records real-time keyboard and mouse inputs into editable timeline cards, automatically coalesces `KeyDown + KeyUp` taps, and filters out kTap's own `0x4B544150` (`"KTAP"`) synthetic injection marker and active hotkeys.
-- **Panic Kill-Switch (`F12`)**: Interrupts running macros immediately — even mid-`Wait` — and invokes **`EmergencyInputSanitizer`** to dispatch matching `KeyUp` / `MouseUp` events in reverse order so `Shift`, `Ctrl`, or mouse buttons never stay stuck down.
+- **Live Recorder (`F7`)**: Records live keyboard and mouse inputs into editable timeline cards, automatically coalesces `KeyDown + KeyUp` taps, and filters out kTap's own `0x4B544150` (`"KTAP"`) synthetic injection marker and active hotkeys.
+- **Panic Kill-Switch (`F12`)**: Interrupts running macros immediately — even mid-`Wait` — and invokes **`EmergencyInputSanitizer`** to dispatch matching `KeyUp` / `MouseUp` events in reverse order so modifiers or mouse buttons never stay stuck down.
 
 ---
 
@@ -238,8 +212,8 @@ Type or paste human-readable macro recipes directly into the **Sequence DSL** ba
 
 kTap is built with defensive local and supply-chain safeguards documented in [`SECURITY.md`](SECURITY.md):
 
-1. **Declarative JSON Profiles (Zero `eval` / `exec` / Arbitrary Scripts)**: `.ktap.json` (and legacy `.kfmacro.json`) files validate strictly against allowlists, bounds, and types in [`src/security/validator.rs`](src/security/validator.rs), rejecting `NaN`/`Infinity`, boolean-as-integer confusion, path traversal, NTFS ADS (`:`), and reserved device names (`CON`, `NUL`, `COM1`).
-2. **Canonical `SHA-256` Signing**: Profiles embed an `integrity_sha256` digest computed via `sha2` (`ktap-v1` / legacy `kfmacro-v1`) and verified using constant-time `subtle::ConstantTimeEq` in [`src/security/integrity.rs`](src/security/integrity.rs).
+1. **Declarative JSON Profiles (Zero `eval` / `exec` / Arbitrary Scripts)**: `.ktap.json` profiles validate strictly against allowlists, bounds, and types in [`src/security/validator.rs`](src/security/validator.rs), rejecting `NaN`/`Infinity`, boolean-as-integer confusion, path traversal, NTFS ADS (`:`), and reserved device names (`CON`, `NUL`, `COM1`).
+2. **Canonical `SHA-256` Signing**: Profiles embed an `integrity_sha256` digest computed via `sha2` (`ktap-v1`, plus legacy `kfmacro-v1` support) and verified using constant-time `subtle::ConstantTimeEq` in [`src/security/integrity.rs`](src/security/integrity.rs).
 3. **Anti-DoS Complexity Budgets**: Caps `MAX_PROFILE_FILE_BYTES = 1 MiB`, `MAX_TOTAL_STEPS = 5,000`, `MAX_NESTING_DEPTH = 5`, `MAX_EXPANDED_OPS_PER_CYCLE = 100,000`, plus a `5ms` minimum inter-cycle flood governor.
 4. **Built-In Static Security Auditor ([`src/security/auditor.rs`](src/security/auditor.rs))**:
 
@@ -276,7 +250,8 @@ flowchart LR
 kTap/
 ├── .github/workflows/ci.yml      # Multi-OS Rust fmt, clippy, test & Release Pipeline
 ├── assets/                       # Embedded Window & Installer Icons (icon.png, icon.ico)
-├── docs/screenshots/             # README Desktop Interface & Dialog Screenshots
+├── docs/screenshots/             # kTap 1.0.0 Desktop Interface & Dialog Screenshots
+├── examples/capture_screenshots.rs # Feature-gated screenshot generator (--features screenshots)
 ├── src/
 │   ├── engine/
 │   │   ├── backend.rs            # InputBackend Trait, Marker & DryRunBackend Simulator
@@ -306,7 +281,7 @@ kTap/
 │   │   └── update_dialog.rs      # SHA-256 Verified GitHub Releases Update Sheet
 │   ├── config.rs                 # Crash-Safe Config, Legacy Migration & Active Profile Backup
 │   ├── installer.rs              # Per-User Installer, Desktop Launchers & Registry Manager
-│   ├── lib.rs                    # Library Crate Root (VERSION = "3.0.0", CODENAME = "Pulse")
+│   ├── lib.rs                    # Library Crate Root (VERSION = "1.0.0")
 │   ├── main.rs                   # Setup Wizard, CLI & Desktop GUI Entry Point
 │   └── updater.rs                # SemVer Client, SHA-256 Verifier & Non-Destructive Hot-Swapper
 ├── tests/integration_tests.rs    # Full Rust Integration, SHA-256 Parity & CLI Suite
@@ -332,7 +307,7 @@ cargo run --release
 ### Command-Line Interface (CLI)
 
 ```bash
-# Check installed version & codename
+# Check installed version
 cargo run -- --version
 
 # Print the one-line Linux Wayland /dev/uinput setup command

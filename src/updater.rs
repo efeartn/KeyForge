@@ -21,6 +21,7 @@ use crate::installer::resolve_powershell_executable;
 use crate::VERSION;
 
 pub const DEFAULT_REPO: &str = "efeartn/kTap";
+pub const LEGACY_REPO: &str = "efeartn/KeyForge";
 pub const MAX_API_RESPONSE_BYTES: usize = 2 * 1024 * 1024;
 pub const MAX_CHECKSUM_FILE_BYTES: usize = 1024 * 1024;
 
@@ -598,16 +599,23 @@ pub fn fetch_latest_release(
     parse_semver(cur_ver).map_err(|e| UpdateCheckError::new(e, "invalid_response", None))?;
 
     let timeout = Duration::from_secs_f64(timeout_secs.max(1.0));
-    let api_url = format!("https://api.github.com/repos/{repo_clean}/releases/latest");
-    let resp = open_https_follow_redirects(
-        &api_url,
-        timeout,
-        &[
-            ("Accept", "application/vnd.github+json"),
-            ("X-GitHub-Api-Version", "2022-11-28"),
-        ],
-    )?;
-    let raw_payload = read_bounded_bytes(resp, MAX_API_RESPONSE_BYTES)?;
+    let query_repo = |slug: &str| -> Result<Vec<u8>, UpdateCheckError> {
+        let api_url = format!("https://api.github.com/repos/{slug}/releases/latest");
+        let resp = open_https_follow_redirects(
+            &api_url,
+            timeout,
+            &[
+                ("Accept", "application/vnd.github+json"),
+                ("X-GitHub-Api-Version", "2022-11-28"),
+            ],
+        )?;
+        read_bounded_bytes(resp, MAX_API_RESPONSE_BYTES)
+    };
+    let raw_payload = match query_repo(repo_clean) {
+        Ok(bytes) => bytes,
+        Err(err) if repo.is_none() && err.status_code == Some(404) => query_repo(LEGACY_REPO)?,
+        Err(err) => return Err(err),
+    };
     let payload: Value = serde_json::from_slice(&raw_payload).map_err(|e| {
         UpdateCheckError::new(
             format!("Malformed JSON in GitHub release response: {e}"),

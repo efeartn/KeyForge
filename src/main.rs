@@ -11,6 +11,7 @@ use clap::Parser;
 use ktap::engine::backend::DryRunBackend;
 use ktap::engine::executor::{ExecutorState, MacroExecutor};
 use ktap::engine::platform::{create_os_input_backend, wayland_udev_setup_command};
+use ktap::full_version_label;
 use ktap::installer::{install_keyforge, is_running_as_setup_installer, uninstall_keyforge};
 use ktap::models::dsl::{format_actions_to_dsl, parse_quick_expression};
 use ktap::models::profile::{create_default_profile, MacroProfile, RepeatMode};
@@ -18,7 +19,6 @@ use ktap::security::auditor::audit_profile;
 use ktap::security::integrity::{load_profile_secure, save_profile_secure};
 use ktap::ui::app::KTapApp;
 use ktap::ui::installer_window::{InstallerMode, InstallerWindow};
-use ktap::{CODENAME, VERSION};
 
 #[derive(Parser, Debug)]
 #[command(
@@ -205,7 +205,7 @@ fn main() {
     let cli = Cli::parse();
 
     if cli.version {
-        println!("kTap v{VERSION} \"{CODENAME}\"");
+        println!("kTap {}", full_version_label());
         std::process::exit(0);
     }
 
@@ -241,7 +241,8 @@ fn main() {
         ) {
             Ok(manifest) => {
                 println!(
-                    "Installed kTap v{VERSION} to: {}",
+                    "Installed kTap {} to: {}",
+                    full_version_label(),
                     manifest.installed_exe.display()
                 );
                 std::process::exit(0);

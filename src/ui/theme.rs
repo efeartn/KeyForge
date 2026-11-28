@@ -280,3 +280,16 @@ pub fn pill_badge(ui: &mut egui::Ui, text: &str, bg: Color32, fg: Color32) {
             ui.label(egui::RichText::new(text).size(10.0).strong().color(fg));
         });
 }
+
+#[cfg(feature = "screenshots")]
+pub fn save_screenshot_image(image: &egui::ColorImage, path: &std::path::Path) {
+    if let Some(parent) = path.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    let pixels: Vec<u8> = image.pixels.iter().flat_map(|c| c.to_array()).collect();
+    if let Some(buf) =
+        image::RgbaImage::from_raw(image.width() as u32, image.height() as u32, pixels)
+    {
+        buf.save(path).expect("failed to save screenshot png");
+    }
+}

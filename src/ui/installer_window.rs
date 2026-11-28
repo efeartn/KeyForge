@@ -6,6 +6,7 @@ use std::process::{Command, Stdio};
 use egui::{Color32, Context, RichText, Rounding, Stroke, ViewportCommand};
 
 use crate::config::get_config_dir;
+use crate::full_version_label;
 use crate::installer::{get_default_install_dir, install_keyforge, uninstall_keyforge};
 use crate::ui::theme::{
     apply_theme, apply_windows_window_branding, card_frame, load_brand_texture,
@@ -13,8 +14,6 @@ use crate::ui::theme::{
     ACCENT_SUCCESS, BG_INPUT, BG_PANEL, BORDER_CONTROL, BORDER_SUBTLE, BTN_NEUTRAL, CTA_SUCCESS,
     CTA_TEXT, TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY,
 };
-use crate::CODENAME;
-use crate::VERSION;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum InstallerMode {
@@ -60,10 +59,11 @@ impl InstallerWindow {
     }
 
     pub fn run(mode: InstallerMode, install_dir: Option<PathBuf>) -> eframe::Result<()> {
+        let ver = full_version_label();
         let title = if mode == InstallerMode::Uninstall {
-            format!("Uninstall kTap v{VERSION} \"{CODENAME}\"")
+            format!("Uninstall kTap {ver}")
         } else {
-            format!("kTap v{VERSION} \"{CODENAME}\" Setup")
+            format!("kTap {ver} Setup")
         };
         let mut vp = egui::ViewportBuilder::default()
             .with_inner_size([540.0, 440.0])
@@ -101,8 +101,11 @@ impl InstallerWindow {
                 ) {
                     Ok(manifest) => {
                         self.finished = true;
-                        self.status_text =
-                            format!("Installed kTap v{VERSION} to {}", self.target_dir.display());
+                        self.status_text = format!(
+                            "Installed kTap {} to {}",
+                            full_version_label(),
+                            self.target_dir.display()
+                        );
                         self.status_color = ACCENT_SUCCESS;
                         if self.launch_after && manifest.installed_exe.is_file() {
                             let _ = Command::new(&manifest.installed_exe)
@@ -156,10 +159,11 @@ impl eframe::App for InstallerWindow {
                         ui.add_space(6.0);
                     }
                     ui.vertical(|ui| {
+                        let ver = full_version_label();
                         let heading = if self.mode == InstallerMode::Setup {
-                            format!("kTap v{VERSION} \"{CODENAME}\" Setup")
+                            format!("kTap {ver} Setup")
                         } else {
-                            format!("Uninstall kTap v{VERSION} \"{CODENAME}\"")
+                            format!("Uninstall kTap {ver}")
                         };
                         let subtitle = if self.mode == InstallerMode::Setup {
                             "Install kTap on this computer while preserving & auto-migrating existing KeyForge configs"
@@ -241,6 +245,7 @@ impl eframe::App for InstallerWindow {
 
                 // Options card
                 card_frame().show(ui, |ui| {
+                    ui.set_width(ui.available_width());
                     let config_dir = get_config_dir(None);
                     if self.mode == InstallerMode::Setup {
                         ui.checkbox(&mut self.desktop_shortcut, "Create Desktop shortcut");
@@ -322,7 +327,7 @@ impl eframe::App for InstallerWindow {
                             (lbl.to_string(), ACCENT_PRIMARY, CTA_TEXT)
                         } else if self.mode == InstallerMode::Setup {
                             (
-                                format!("Install kTap v{VERSION}"),
+                                format!("Install kTap {}", full_version_label()),
                                 CTA_SUCCESS,
                                 CTA_TEXT,
                             )
@@ -339,5 +344,66 @@ impl eframe::App for InstallerWindow {
                     });
                 });
             });
+    }
+}
+
+#[cfg(feature = "screenshots")]
+impl InstallerWindow {
+    pub fn capture_screenshot(out_path: PathBuf) -> eframe::Result<()> {
+        let mut vp = egui::ViewportBuilder::default()
+            .with_inner_size([560.0, 520.0])
+            .with_resizable(false);
+        if let Some(icon) = load_window_icon_data() {
+            vp = vp.with_icon(icon);
+        }
+        let options = eframe::NativeOptions {
+            viewport: vp,
+            ..Default::default()
+        };
+        struct CaptureInstaller {
+            inner: InstallerWindow,
+            out_path: PathBuf,
+            frames: u32,
+            requested: bool,
+            done: bool,
+        }
+        impl eframe::App for CaptureInstaller {
+            fn update(&mut self, ctx: &Context, frame: &mut eframe::Frame) {
+                let captured = ctx.input(|i| {
+                    i.events.iter().find_map(|e| match e {
+                        egui::Event::Screenshot { image, .. } => Some(image.clone()),
+                        _ => None,
+                    })
+                });
+                if let Some(img) = captured {
+                    crate::ui::theme::save_screenshot_image(&img, &self.out_path);
+                    self.done = true;
+                    ctx.send_viewport_cmd(ViewportCommand::Close);
+                    return;
+                }
+                self.inner.update(ctx, frame);
+                self.frames += 1;
+                if self.frames >= 8 && !self.requested && !self.done {
+                    self.requested = true;
+                    ctx.send_viewport_cmd(ViewportCommand::Screenshot);
+                }
+                ctx.request_repaint();
+            }
+        }
+        let ver = full_version_label();
+        eframe::run_native(
+            &format!("kTap {ver} Setup"),
+            options,
+            Box::new(|cc| {
+                apply_theme(&cc.egui_ctx);
+                Ok(Box::new(CaptureInstaller {
+                    inner: InstallerWindow::new(InstallerMode::Setup, None),
+                    out_path,
+                    frames: 0,
+                    requested: false,
+                    done: false,
+                }))
+            }),
+        )
     }
 }

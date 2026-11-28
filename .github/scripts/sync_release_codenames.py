@@ -1,28 +1,16 @@
-"""Resolve kTap release codename and synchronize historical GitHub Release titles."""
+"""Resolve kTap GitHub release title for the tagged version."""
 
 from __future__ import annotations
 
-import json
 import os
 import re
-import urllib.error
-import urllib.request
-
-
-def brand_for_version(version_str: str) -> str:
-    clean = version_str.lstrip("vV").split("-", 1)[0].split("+", 1)[0]
-    try:
-        major = int(clean.split(".", 1)[0])
-    except ValueError:
-        major = 3
-    return "kTap" if major >= 3 else "KeyForge"
 
 
 def main() -> int:
     with open("Cargo.toml", "r", encoding="utf-8") as f:
         cargo_text = f.read()
     m = re.search(r'(?m)^codename\s*=\s*"([^"]+)"', cargo_text)
-    current_codename = m.group(1) if m else ""
+    codename = m.group(1).strip() if m else ""
 
     with open("src/lib.rs", "r", encoding="utf-8") as f:
         lib_text = f.read()
@@ -30,9 +18,8 @@ def main() -> int:
 
     tag = os.environ["TAG_NAME"]
     ver = tag.lstrip("vV").split("-", 1)[0]
-    codename = pairs.get(ver, current_codename)
-    brand = brand_for_version(tag)
-    title = f'{brand} {tag} "{codename}"' if codename else f"{brand} {tag}"
+    codename = pairs.get(ver, codename)
+    title = f'{ver} "{codename}"' if codename else ver
 
     github_output = os.environ.get("GITHUB_OUTPUT")
     if github_output:
@@ -40,44 +27,7 @@ def main() -> int:
             out.write(f"codename={codename}\n")
             out.write(f"release_title={title}\n")
 
-    token = os.environ["GH_TOKEN"]
-    repo = os.environ["GH_REPO"]
-    headers = {
-        "Accept": "application/vnd.github+json",
-        "Authorization": f"Bearer {token}",
-        "User-Agent": "kTap-Release-Sync",
-        "X-GitHub-Api-Version": "2022-11-28",
-    }
-
-    req = urllib.request.Request(
-        f"https://api.github.com/repos/{repo}/releases?per_page=50",
-        headers=headers,
-    )
-    with urllib.request.urlopen(req, timeout=20) as resp:
-        releases = json.loads(resp.read().decode("utf-8"))
-
-    for rel in releases:
-        rtag = rel.get("tag_name", "")
-        rver = rtag.lstrip("vV").split("-", 1)[0]
-        rcodename = pairs.get(rver)
-        if not rcodename:
-            continue
-        rbrand = brand_for_version(rtag)
-        want_name = f'{rbrand} {rtag} "{rcodename}"'
-        if rel.get("name") == want_name:
-            continue
-        patch_req = urllib.request.Request(
-            f"https://api.github.com/repos/{repo}/releases/{rel['id']}",
-            data=json.dumps({"name": want_name}).encode("utf-8"),
-            headers={**headers, "Content-Type": "application/json"},
-            method="PATCH",
-        )
-        try:
-            with urllib.request.urlopen(patch_req, timeout=20) as presp:
-                print(f"Synced {rtag} -> {want_name} (HTTP {presp.status})")
-        except urllib.error.HTTPError as err:
-            print(f"Warning: could not sync {rtag}: HTTP {err.code}")
-
+    print(f"Resolved tag={tag} -> release_title={title}")
     return 0
 
 

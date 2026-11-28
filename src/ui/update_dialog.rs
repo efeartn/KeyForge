@@ -16,7 +16,7 @@ use crate::updater::{
     apply_update_and_restart, download_update_asset, fetch_latest_release, ReleaseInfo,
     DEFAULT_REPO,
 };
-use crate::{codename_for_version, CODENAME, VERSION};
+use crate::{codename_for_version, full_version_label, VERSION};
 
 enum UpdateMsg {
     CheckOk(Box<ReleaseInfo>),
@@ -58,7 +58,7 @@ impl UpdateDialogState {
             is_downloading: false,
             cancel_flag: Arc::new(AtomicBool::new(false)),
             progress_frac: 0.0,
-            status_title: format!("kTap v{VERSION} \"{CODENAME}\""),
+            status_title: format!("kTap {}", full_version_label()),
             meta_text: "Checking GitHub Releases...".to_string(),
             progress_text: String::new(),
             notes_text: String::new(),
@@ -90,8 +90,7 @@ impl UpdateDialogState {
             .map(|c| format!(" \"{c}\""))
             .unwrap_or_default();
         if rel.is_update_available {
-            self.status_title =
-                format!("Update Available: v{}{}", rel.version, rel_codename_suffix);
+            self.status_title = format!("Update Available: {}{}", rel.version, rel_codename_suffix);
             let sha_hint = rel
                 .sha256
                 .as_ref()
@@ -113,9 +112,9 @@ impl UpdateDialogState {
                     "No matching binary asset found for this OS. Use Release Page.".to_string();
             }
         } else {
-            self.status_title = format!("You're Up to Date (v{VERSION} \"{CODENAME}\")");
+            self.status_title = format!("You're Up to Date ({})", full_version_label());
             self.meta_text = format!(
-                "Latest release on GitHub: v{}{}",
+                "Latest release on GitHub: {}{}",
                 rel.version, rel_codename_suffix
             );
             self.progress_text = "kTap is running the latest version.".to_string();
@@ -134,7 +133,7 @@ impl UpdateDialogState {
         std::thread::Builder::new()
             .name("kTap-UpdateCheck".to_string())
             .spawn(
-                move || match fetch_latest_release(Some(VERSION), Some(DEFAULT_REPO), 8.0) {
+                move || match fetch_latest_release(Some(VERSION), None, 8.0) {
                     Ok(rel) => {
                         let _ = tx.send(UpdateMsg::CheckOk(Box::new(rel)));
                     }

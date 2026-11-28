@@ -50,8 +50,8 @@ use crate::ui::theme::{
     TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY,
 };
 use crate::ui::update_dialog::{UpdateDialogAction, UpdateDialogState};
-use crate::updater::{fetch_latest_release, ReleaseInfo, DEFAULT_REPO};
-use crate::{CODENAME, VERSION};
+use crate::updater::{fetch_latest_release, ReleaseInfo};
+use crate::{full_version_label, VERSION};
 
 const MAX_UNDO_HISTORY: usize = 40;
 const MAX_CONSOLE_LINES: usize = 200;
@@ -204,7 +204,7 @@ impl KTapApp {
             viewport: vp,
             ..Default::default()
         };
-        let title = format!("kTap v{VERSION} \"{CODENAME}\"");
+        let title = format!("kTap {}", full_version_label());
         eframe::run_native(
             &title,
             options,
@@ -317,7 +317,7 @@ impl KTapApp {
             last_telem_error: None,
             cursor_xy: (0, 0),
             console_lines: Vec::new(),
-            footer_status: format!("\u{25CF} Ready \u{2014} kTap v{VERSION} \"{CODENAME}\""),
+            footer_status: format!("\u{2022} Ready \u{2014} kTap {}", full_version_label()),
             toast: None,
             key_capture_target: None,
             step_dialog: None,
@@ -339,7 +339,8 @@ impl KTapApp {
         app.sync_profile_to_simple_spammer_fields();
         app.run_security_audit();
         app.log_event(&format!(
-            "kTap v{VERSION} \"{CODENAME}\" ({} \u{00B7} {}) ready. Panic Stop armed on [{}].",
+            "kTap {} ({} \u{00B7} {}) ready. Panic Stop armed on [{}].",
+            full_version_label(),
             platform_badge_label(),
             app.platform_caps.backend_name,
             app.profile.panic_hotkey
@@ -354,7 +355,7 @@ impl KTapApp {
             std::thread::Builder::new()
                 .name("kTap-StartupUpdate".to_string())
                 .spawn(move || {
-                    let found = fetch_latest_release(Some(VERSION), Some(DEFAULT_REPO), 8.0)
+                    let found = fetch_latest_release(Some(VERSION), None, 8.0)
                         .ok()
                         .filter(|r| r.is_update_available);
                     let _ = startup_tx.send(found);
@@ -405,7 +406,7 @@ impl KTapApp {
             let excess = self.console_lines.len() - MAX_CONSOLE_LINES;
             self.console_lines.drain(0..excess);
         }
-        self.footer_status = format!("\u{25CF} [{ts}] {msg}");
+        self.footer_status = format!("\u{2022} [{ts}] {msg}");
     }
 
     fn save_persistent_state(&mut self) {
@@ -1409,12 +1410,7 @@ impl KTapApp {
                             .strong()
                             .color(TEXT_PRIMARY),
                     );
-                    pill_badge(
-                        ui,
-                        &format!("v{VERSION} \u{00B7} {CODENAME}"),
-                        BG_ELEVATED,
-                        TEXT_SECONDARY,
-                    );
+                    pill_badge(ui, &full_version_label(), BG_ELEVATED, TEXT_SECONDARY);
                     pill_badge(ui, platform_badge_label(), BG_ELEVATED, ACCENT_PRIMARY);
 
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
@@ -1447,7 +1443,7 @@ impl KTapApp {
                             .filter(|r| r.is_update_available)
                         {
                             (
-                                format!("\u{2728} Update v{}", rel.version),
+                                format!("Update v{}", rel.version),
                                 CTA_SUCCESS,
                                 CTA_TEXT,
                                 CTA_SUCCESS,
@@ -1560,7 +1556,7 @@ impl KTapApp {
                         };
                         ui.label(
                             RichText::new(format!(
-                                "/ Filter \u{00B7} Del Delete \u{00B7} {dup} \u{00B7} Space Toggle \u{00B7} Alt+\u{2191}/\u{2193} Move \u{00B7} Dbl-Click Edit"
+                                "/ Filter \u{00B7} Del Delete \u{00B7} {dup} \u{00B7} Space Toggle \u{00B7} Alt+Up/Dn Move \u{00B7} Dbl-Click Edit"
                             ))
                             .size(11.0)
                             .color(TEXT_MUTED),
@@ -1587,7 +1583,7 @@ impl KTapApp {
                         ui.horizontal(|ui| {
                             ui.label(
                                 RichText::new(format!(
-                                    "\u{2728} kTap v{} is available \u{2014} Update cleanly while keeping all your configs & macros",
+                                    "kTap v{} is available \u{2014} Update cleanly while keeping all your configs & macros",
                                     rel.version
                                 ))
                                 .size(11.5)
@@ -1637,7 +1633,7 @@ impl KTapApp {
                             egui::Label::new(RichText::new(&notice).size(11.0).color(fg)).wrap(),
                         );
                         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                            if ghost_button(ui, "\u{2715}", TEXT_SECONDARY).clicked() {
+                            if ghost_button(ui, "\u{00D7}", TEXT_SECONDARY).clicked() {
                                 self.platform_notice_dismissed = true;
                             }
                             if show_wayland_copy
@@ -1679,7 +1675,7 @@ impl KTapApp {
                     ui.horizontal(|ui| {
                         ui.label(RichText::new(toast.0).size(11.5).strong().color(fg));
                         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                            if ghost_button(ui, "\u{2715}", TEXT_SECONDARY).clicked() {
+                            if ghost_button(ui, "\u{00D7}", TEXT_SECONDARY).clicked() {
                                 self.toast = None;
                             }
                         });
@@ -2186,12 +2182,12 @@ impl KTapApp {
                             self.latest_release.as_ref().filter(|r| r.is_update_available)
                         {
                             (
-                                format!("\u{2728} Update v{} available \u{2014} Install", rel.version),
+                                format!("Update v{} available \u{2014} Install", rel.version),
                                 ACCENT_SUCCESS,
                             )
                         } else {
                             (
-                                format!("\u{2713} kTap v{VERSION} \u{2022} Check Updates"),
+                                format!("kTap {} \u{2022} Check Updates", full_version_label()),
                                 TEXT_SECONDARY,
                             )
                         };
@@ -2220,18 +2216,18 @@ impl KTapApp {
 
     fn status_badge_style(state: ExecutorState) -> (&'static str, Color32) {
         match state {
-            ExecutorState::Idle => ("\u{25CF} Ready", ACCENT_SUCCESS),
-            ExecutorState::Running => ("\u{25CF} Running", ACCENT_PRIMARY),
-            ExecutorState::Stopping => ("\u{25CF} Stopping", ACCENT_WARNING),
-            ExecutorState::PanicAborted => ("\u{25CF} Stopped (Panic)", ACCENT_DANGER),
-            ExecutorState::Error => ("\u{25CF} Error", ACCENT_DANGER),
+            ExecutorState::Idle => ("\u{2022} Ready", ACCENT_SUCCESS),
+            ExecutorState::Running => ("\u{2022} Running", ACCENT_PRIMARY),
+            ExecutorState::Stopping => ("\u{2022} Stopping", ACCENT_WARNING),
+            ExecutorState::PanicAborted => ("\u{2022} Stopped (Panic)", ACCENT_DANGER),
+            ExecutorState::Error => ("\u{2022} Error", ACCENT_DANGER),
         }
     }
 
     fn draw_primary_cta(&mut self, ui: &mut egui::Ui, is_running: bool, height: f32) {
         let (text, fill, fg) = if is_running {
             (
-                format!("\u{23F9} Stop Macro ({})", self.profile.start_stop_hotkey),
+                format!("\u{25A0} Stop Macro ({})", self.profile.start_stop_hotkey),
                 ACCENT_DANGER,
                 Color32::WHITE,
             )
@@ -2241,10 +2237,7 @@ impl KTapApp {
                 .as_secs_f32()
                 .max(0.1);
             (
-                format!(
-                    "\u{23F3} Starting in {rem:.1}s ({})",
-                    self.profile.start_stop_hotkey
-                ),
+                format!("Starting in {rem:.1}s ({})", self.profile.start_stop_hotkey),
                 ACCENT_WARNING,
                 CTA_TEXT,
             )
@@ -2277,298 +2270,356 @@ impl KTapApp {
     ) {
         let total_w = ui.available_width();
         let card_h = 104.0;
-        let w = (total_w - 24.0) / 4.25;
-        let cta_w = total_w - 24.0 - w * 3.0;
+        let gap = 8.0;
+        let w = ((total_w - gap * 3.0) / 4.25).max(160.0);
+        let cta_w = (total_w - gap * 3.0 - w * 3.0).max(200.0);
+        let inner_w = (w - 24.0).max(120.0);
+        let cta_inner_w = (cta_w - 24.0).max(160.0);
 
-        ui.horizontal(|ui| {
+        ui.horizontal_top(|ui| {
+            ui.spacing_mut().item_spacing.x = gap;
             // Card 1: Profile & Security Badge
-            ui.allocate_ui(Vec2::new(w, card_h), |ui| {
-                panel_frame().show(ui, |ui| {
-                    ui.set_min_height(card_h - 24.0);
-                    ui.horizontal(|ui| {
-                        micro_heading(ui, "PROFILE");
-                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                            let (badge_txt, badge_bg, badge_fg) = if self.last_audit.has_critical()
-                            {
-                                (
-                                    format!(
-                                        "Alert: {}",
-                                        self.last_audit
-                                            .findings
-                                            .iter()
-                                            .filter(|f| f.severity == AuditSeverity::Critical)
-                                            .count()
-                                    ),
-                                    BADGE_CRIT_BG,
-                                    BADGE_CRIT_FG,
-                                )
-                            } else if self.last_audit.has_warnings() {
-                                (
-                                    format!(
-                                        "Notice ({})",
-                                        self.last_audit
-                                            .findings
-                                            .iter()
-                                            .filter(|f| f.severity == AuditSeverity::Warning)
-                                            .count()
-                                    ),
-                                    BADGE_WARN_BG,
-                                    BADGE_WARN_FG,
-                                )
-                            } else {
-                                ("Verified".to_string(), BG_ELEVATED, ACCENT_SUCCESS)
-                            };
-                            if ui
-                                .add(
-                                    egui::Button::new(
-                                        RichText::new(badge_txt)
-                                            .size(10.0)
-                                            .strong()
-                                            .color(badge_fg),
-                                    )
-                                    .fill(badge_bg)
-                                    .stroke(Stroke::new(1.0_f32, BORDER_SUBTLE))
-                                    .rounding(Rounding::same(5.0)),
-                                )
-                                .clicked()
-                            {
-                                self.inspector_tab = InspectorTab::Security;
-                                self.refresh_security_details();
-                            }
+            ui.allocate_ui_with_layout(
+                Vec2::new(w, card_h),
+                egui::Layout::top_down(egui::Align::LEFT),
+                |ui| {
+                    ui.set_width(w);
+                    ui.set_max_width(w);
+                    panel_frame().show(ui, |ui| {
+                        ui.set_width(inner_w);
+                        ui.set_min_height(card_h - 24.0);
+                        ui.horizontal(|ui| {
+                            micro_heading(ui, "PROFILE");
+                            ui.with_layout(
+                                egui::Layout::right_to_left(egui::Align::Center),
+                                |ui| {
+                                    let (badge_txt, badge_bg, badge_fg) =
+                                        if self.last_audit.has_critical() {
+                                            (
+                                                format!(
+                                                    "Alert: {}",
+                                                    self.last_audit
+                                                        .findings
+                                                        .iter()
+                                                        .filter(|f| f.severity
+                                                            == AuditSeverity::Critical)
+                                                        .count()
+                                                ),
+                                                BADGE_CRIT_BG,
+                                                BADGE_CRIT_FG,
+                                            )
+                                        } else if self.last_audit.has_warnings() {
+                                            (
+                                                format!(
+                                                    "Notice ({})",
+                                                    self.last_audit
+                                                        .findings
+                                                        .iter()
+                                                        .filter(|f| f.severity
+                                                            == AuditSeverity::Warning)
+                                                        .count()
+                                                ),
+                                                BADGE_WARN_BG,
+                                                BADGE_WARN_FG,
+                                            )
+                                        } else {
+                                            ("Verified".to_string(), BG_ELEVATED, ACCENT_SUCCESS)
+                                        };
+                                    if ui
+                                        .add(
+                                            egui::Button::new(
+                                                RichText::new(badge_txt)
+                                                    .size(10.0)
+                                                    .strong()
+                                                    .color(badge_fg),
+                                            )
+                                            .fill(badge_bg)
+                                            .stroke(Stroke::new(1.0_f32, BORDER_SUBTLE))
+                                            .rounding(Rounding::same(5.0)),
+                                        )
+                                        .clicked()
+                                    {
+                                        self.inspector_tab = InspectorTab::Security;
+                                        self.refresh_security_details();
+                                    }
+                                },
+                            );
                         });
-                    });
 
-                    ui.add_space(4.0);
-                    let mut chosen_preset: Option<MacroProfile> = None;
-                    egui::ComboBox::from_id_salt("studio_preset_combo")
-                        .width(ui.available_width())
-                        .selected_text(RichText::new(&self.profile.name).size(11.5).strong())
-                        .show_ui(ui, |ui| {
-                            for p in &self.presets {
-                                if ui
-                                    .selectable_label(self.profile.name == p.name, &p.name)
-                                    .clicked()
-                                {
-                                    chosen_preset = Some(p.clone());
+                        ui.add_space(4.0);
+                        let mut chosen_preset: Option<MacroProfile> = None;
+                        egui::ComboBox::from_id_salt("studio_preset_combo")
+                            .width(inner_w)
+                            .selected_text(RichText::new(&self.profile.name).size(11.5).strong())
+                            .show_ui(ui, |ui| {
+                                for p in &self.presets {
+                                    if ui
+                                        .selectable_label(self.profile.name == p.name, &p.name)
+                                        .clicked()
+                                    {
+                                        chosen_preset = Some(p.clone());
+                                    }
+                                }
+                            });
+                        if let Some(p) = chosen_preset {
+                            if self.executor.is_running() {
+                                self.executor.stop(Duration::from_secs(2));
+                            }
+                            self.filter_query.clear();
+                            self.step_filter = StepFilter::All;
+                            self.record_undo();
+                            self.profile = p;
+                            self.sync_profile_settings_to_ui();
+                            self.rebind_hotkeys();
+                            self.on_sequence_mutated(true);
+                            self.log_event(&format!(
+                                "Loaded preset profile: {}",
+                                self.profile.name
+                            ));
+                        }
+
+                        ui.add_space(4.0);
+                        ui.horizontal(|ui| {
+                            if ghost_button(ui, "+ Save Preset", ACCENT_SUCCESS).clicked() {
+                                let cur = self.profile.name.trim().to_string();
+                                let auto = cur.is_empty()
+                                    || self.builtin_names.contains(&cur)
+                                    || cur == "Custom Profile"
+                                    || cur.starts_with("Key Spammer")
+                                    || cur.starts_with("Untitled");
+                                if auto {
+                                    self.save_preset_modal = Some(String::new());
+                                } else if self.save_custom_preset_named(&cur) {
+                                    // saved directly
                                 }
                             }
-                        });
-                    if let Some(p) = chosen_preset {
-                        if self.executor.is_running() {
-                            self.executor.stop(Duration::from_secs(2));
-                        }
-                        self.filter_query.clear();
-                        self.step_filter = StepFilter::All;
-                        self.record_undo();
-                        self.profile = p;
-                        self.sync_profile_settings_to_ui();
-                        self.rebind_hotkeys();
-                        self.on_sequence_mutated(true);
-                        self.log_event(&format!("Loaded preset profile: {}", self.profile.name));
-                    }
 
-                    ui.add_space(4.0);
-                    ui.horizontal(|ui| {
-                        if ghost_button(ui, "+ Save Preset", ACCENT_SUCCESS).clicked() {
-                            let cur = self.profile.name.trim().to_string();
-                            let auto = cur.is_empty()
-                                || self.builtin_names.contains(&cur)
-                                || cur == "Custom Profile"
-                                || cur.starts_with("Key Spammer")
-                                || cur.starts_with("Untitled");
-                            if auto {
-                                self.save_preset_modal = Some(String::new());
-                            } else if self.save_custom_preset_named(&cur) {
-                                // saved directly
-                            }
-                        }
-
-                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                            if ghost_button(ui, "Delete", TEXT_MUTED).clicked() {
-                                let name = self.profile.name.clone();
-                                if self.builtin_names.contains(&name) {
-                                    self.show_toast(
-                                        "Built-in presets cannot be deleted.",
-                                        ToastLevel::Warning,
-                                        3,
-                                    );
-                                } else if delete_custom_preset(&name, None) {
-                                    self.reload_presets_catalog();
-                                    self.show_toast(
-                                        format!("Deleted custom preset '{name}'."),
-                                        ToastLevel::Info,
-                                        3,
-                                    );
-                                }
-                            }
-                        });
-                    });
-                });
-            });
-
-            // Card 2: Execution Telemetry & Progress
-            ui.allocate_ui(Vec2::new(w, card_h), |ui| {
-                panel_frame().show(ui, |ui| {
-                    ui.set_min_height(card_h - 24.0);
-                    ui.horizontal(|ui| {
-                        micro_heading(ui, "ENGINE");
-                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                            let (m_txt, m_bg, m_fg) = if self.dry_run {
-                                ("Dry-Run", BADGE_WARN_BG, BADGE_WARN_FG)
-                            } else if !self.platform_caps.can_inject {
-                                (
-                                    if self.platform_caps.requires_permission {
-                                        "Access Needed"
-                                    } else {
-                                        "Preview Only"
-                                    },
-                                    BADGE_WARN_BG,
-                                    BADGE_WARN_FG,
-                                )
-                            } else {
-                                ("Live Input", BG_ELEVATED, TEXT_SECONDARY)
-                            };
-                            egui::Frame::none()
-                                .fill(m_bg)
-                                .rounding(Rounding::same(5.0))
-                                .inner_margin(egui::Margin::symmetric(6.0, 1.0))
-                                .show(ui, |ui| {
-                                    ui.label(RichText::new(m_txt).size(10.0).strong().color(m_fg));
-                                });
-                        });
-                    });
-                    let (st_text, st_color) = Self::status_badge_style(telem.state);
-                    ui.label(RichText::new(st_text).size(14.0).strong().color(st_color));
-                    ui.label(
-                        RichText::new(format!(
-                            "{} Cycles | {} Actions",
-                            telem.cycles_completed, telem.actions_executed
-                        ))
-                        .size(11.5)
-                        .strong()
-                        .color(TEXT_PRIMARY),
-                    );
-                    ui.label(
-                        RichText::new(format!(
-                            "Cycle: {}ms \u{2022} {:.1}s",
-                            self.cached_cycle_wait_ms, telem.elapsed_seconds
-                        ))
-                        .monospace()
-                        .size(11.0)
-                        .color(TEXT_SECONDARY),
-                    );
-                    let ratio = match self.profile.repeat_mode {
-                        RepeatMode::Count if self.profile.repeat_count > 0 => {
-                            (telem.cycles_completed as f32 / self.profile.repeat_count as f32)
-                                .clamp(0.0, 1.0)
-                        }
-                        RepeatMode::Duration if self.profile.repeat_duration_s > 0.0 => {
-                            (telem.elapsed_seconds as f32 / self.profile.repeat_duration_s as f32)
-                                .clamp(0.0, 1.0)
-                        }
-                        _ => {
-                            if is_running {
-                                1.0
-                            } else {
-                                0.0
-                            }
-                        }
-                    };
-                    ui.add(egui::ProgressBar::new(ratio).desired_height(3.0).fill(
-                        if ratio > 0.0 {
-                            ACCENT_PRIMARY
-                        } else {
-                            BG_ELEVATED
-                        },
-                    ));
-                });
-            });
-
-            // Card 3: Hotkeys & Cursor
-            ui.allocate_ui(Vec2::new(w, card_h), |ui| {
-                panel_frame().show(ui, |ui| {
-                    ui.set_min_height(card_h - 24.0);
-                    ui.horizontal(|ui| {
-                        micro_heading(ui, "HOTKEYS");
-                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                            ui.label(
-                                RichText::new(format!(
-                                    "XY: ({}, {})",
-                                    self.cursor_xy.0, self.cursor_xy.1
-                                ))
-                                .monospace()
-                                .size(11.0)
-                                .color(TEXT_SECONDARY),
+                            ui.with_layout(
+                                egui::Layout::right_to_left(egui::Align::Center),
+                                |ui| {
+                                    if ghost_button(ui, "Delete", TEXT_MUTED).clicked() {
+                                        let name = self.profile.name.clone();
+                                        if self.builtin_names.contains(&name) {
+                                            self.show_toast(
+                                                "Built-in presets cannot be deleted.",
+                                                ToastLevel::Warning,
+                                                3,
+                                            );
+                                        } else if delete_custom_preset(&name, None) {
+                                            self.reload_presets_catalog();
+                                            self.show_toast(
+                                                format!("Deleted custom preset '{name}'."),
+                                                ToastLevel::Info,
+                                                3,
+                                            );
+                                        }
+                                    }
+                                },
                             );
                         });
                     });
-                    ui.add_space(4.0);
-                    ui.label(
-                        RichText::new(format!(
-                            "Run: {} \u{2022} Rec: {} \u{2022} Panic: {}",
-                            self.profile.start_stop_hotkey,
-                            self.profile.record_hotkey,
-                            self.profile.panic_hotkey
-                        ))
-                        .size(11.5)
-                        .strong()
-                        .color(TEXT_PRIMARY),
-                    );
-                    ui.add_space(6.0);
-                    if ui
-                        .checkbox(&mut self.dry_run, "Dry-Run Simulation")
-                        .changed()
-                    {
-                        self.save_persistent_state();
-                    }
-                });
-            });
+                },
+            );
 
-            // Card 4: Delay & Primary CTA
-            ui.allocate_ui(Vec2::new(cta_w, card_h), |ui| {
-                panel_frame().show(ui, |ui| {
-                    ui.set_min_height(card_h - 24.0);
-                    ui.horizontal(|ui| {
-                        micro_heading(ui, "DELAY");
-                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                            for sec in [5, 3, 1, 0] {
-                                let active = self.countdown_sec == sec;
-                                if styled_button(
-                                    ui,
-                                    &format!("{sec}s"),
-                                    if active { SEGMENT_ACTIVE } else { BG_INPUT },
-                                    TEXT_PRIMARY,
-                                    BORDER_SUBTLE,
-                                )
-                                .clicked()
-                                {
-                                    self.countdown_sec = sec;
-                                    self.save_persistent_state();
-                                }
-                            }
+            // Card 2: Execution Telemetry & Progress
+            ui.allocate_ui_with_layout(
+                Vec2::new(w, card_h),
+                egui::Layout::top_down(egui::Align::LEFT),
+                |ui| {
+                    ui.set_width(w);
+                    ui.set_max_width(w);
+                    panel_frame().show(ui, |ui| {
+                        ui.set_width(inner_w);
+                        ui.set_min_height(card_h - 24.0);
+                        ui.horizontal(|ui| {
+                            micro_heading(ui, "ENGINE");
+                            ui.with_layout(
+                                egui::Layout::right_to_left(egui::Align::Center),
+                                |ui| {
+                                    let (m_txt, m_bg, m_fg) = if self.dry_run {
+                                        ("Dry-Run", BADGE_WARN_BG, BADGE_WARN_FG)
+                                    } else if !self.platform_caps.can_inject {
+                                        (
+                                            if self.platform_caps.requires_permission {
+                                                "Access Needed"
+                                            } else {
+                                                "Preview Only"
+                                            },
+                                            BADGE_WARN_BG,
+                                            BADGE_WARN_FG,
+                                        )
+                                    } else {
+                                        ("Live Input", BG_ELEVATED, TEXT_SECONDARY)
+                                    };
+                                    egui::Frame::none()
+                                        .fill(m_bg)
+                                        .rounding(Rounding::same(5.0))
+                                        .inner_margin(egui::Margin::symmetric(6.0, 1.0))
+                                        .show(ui, |ui| {
+                                            ui.label(
+                                                RichText::new(m_txt)
+                                                    .size(10.0)
+                                                    .strong()
+                                                    .color(m_fg),
+                                            );
+                                        });
+                                },
+                            );
                         });
-                    });
-                    ui.add_space(4.0);
-                    self.draw_primary_cta(ui, is_running, 34.0);
-                    let mode_str = match self.profile.repeat_mode {
-                        RepeatMode::Count => "Fixed Count",
-                        RepeatMode::Infinite => "Infinite",
-                        RepeatMode::Duration => "Duration",
-                    };
-                    ui.centered_and_justified(|ui| {
+                        let (st_text, st_color) = Self::status_badge_style(telem.state);
+                        ui.label(RichText::new(st_text).size(14.0).strong().color(st_color));
                         ui.label(
                             RichText::new(format!(
-                                "{mode_str} \u{00B7} {}/{} steps \u{00B7} {}ms",
-                                self.cached_enabled_count,
-                                self.profile.actions.len(),
-                                self.cached_cycle_wait_ms
+                                "{} Cycles | {} Actions",
+                                telem.cycles_completed, telem.actions_executed
                             ))
-                            .size(10.5)
-                            .color(TEXT_MUTED),
+                            .size(11.5)
+                            .strong()
+                            .color(TEXT_PRIMARY),
                         );
+                        ui.label(
+                            RichText::new(format!(
+                                "Cycle: {}ms \u{2022} {:.1}s",
+                                self.cached_cycle_wait_ms, telem.elapsed_seconds
+                            ))
+                            .monospace()
+                            .size(11.0)
+                            .color(TEXT_SECONDARY),
+                        );
+                        let ratio = match self.profile.repeat_mode {
+                            RepeatMode::Count if self.profile.repeat_count > 0 => {
+                                (telem.cycles_completed as f32 / self.profile.repeat_count as f32)
+                                    .clamp(0.0, 1.0)
+                            }
+                            RepeatMode::Duration if self.profile.repeat_duration_s > 0.0 => {
+                                (telem.elapsed_seconds as f32
+                                    / self.profile.repeat_duration_s as f32)
+                                    .clamp(0.0, 1.0)
+                            }
+                            _ => {
+                                if is_running {
+                                    1.0
+                                } else {
+                                    0.0
+                                }
+                            }
+                        };
+                        ui.add(egui::ProgressBar::new(ratio).desired_height(3.0).fill(
+                            if ratio > 0.0 {
+                                ACCENT_PRIMARY
+                            } else {
+                                BG_ELEVATED
+                            },
+                        ));
                     });
-                });
-            });
+                },
+            );
+
+            // Card 3: Hotkeys & Cursor
+            ui.allocate_ui_with_layout(
+                Vec2::new(w, card_h),
+                egui::Layout::top_down(egui::Align::LEFT),
+                |ui| {
+                    ui.set_width(w);
+                    ui.set_max_width(w);
+                    panel_frame().show(ui, |ui| {
+                        ui.set_width(inner_w);
+                        ui.set_min_height(card_h - 24.0);
+                        ui.horizontal(|ui| {
+                            micro_heading(ui, "HOTKEYS");
+                            ui.with_layout(
+                                egui::Layout::right_to_left(egui::Align::Center),
+                                |ui| {
+                                    ui.label(
+                                        RichText::new(format!(
+                                            "XY: ({}, {})",
+                                            self.cursor_xy.0, self.cursor_xy.1
+                                        ))
+                                        .monospace()
+                                        .size(11.0)
+                                        .color(TEXT_SECONDARY),
+                                    );
+                                },
+                            );
+                        });
+                        ui.add_space(4.0);
+                        ui.label(
+                            RichText::new(format!(
+                                "Run: {} \u{2022} Rec: {} \u{2022} Panic: {}",
+                                self.profile.start_stop_hotkey,
+                                self.profile.record_hotkey,
+                                self.profile.panic_hotkey
+                            ))
+                            .size(11.5)
+                            .strong()
+                            .color(TEXT_PRIMARY),
+                        );
+                        ui.add_space(6.0);
+                        if ui
+                            .checkbox(&mut self.dry_run, "Dry-Run Simulation")
+                            .changed()
+                        {
+                            self.save_persistent_state();
+                        }
+                    });
+                },
+            );
+
+            // Card 4: Delay & Primary CTA
+            ui.allocate_ui_with_layout(
+                Vec2::new(cta_w, card_h),
+                egui::Layout::top_down(egui::Align::LEFT),
+                |ui| {
+                    ui.set_width(cta_w);
+                    ui.set_max_width(cta_w);
+                    panel_frame().show(ui, |ui| {
+                        ui.set_width(cta_inner_w);
+                        ui.set_min_height(card_h - 24.0);
+                        ui.horizontal(|ui| {
+                            micro_heading(ui, "DELAY");
+                            ui.with_layout(
+                                egui::Layout::right_to_left(egui::Align::Center),
+                                |ui| {
+                                    for sec in [5, 3, 1, 0] {
+                                        let active = self.countdown_sec == sec;
+                                        if styled_button(
+                                            ui,
+                                            &format!("{sec}s"),
+                                            if active { SEGMENT_ACTIVE } else { BG_INPUT },
+                                            TEXT_PRIMARY,
+                                            BORDER_SUBTLE,
+                                        )
+                                        .clicked()
+                                        {
+                                            self.countdown_sec = sec;
+                                            self.save_persistent_state();
+                                        }
+                                    }
+                                },
+                            );
+                        });
+                        ui.add_space(4.0);
+                        self.draw_primary_cta(ui, is_running, 34.0);
+                        let mode_str = match self.profile.repeat_mode {
+                            RepeatMode::Count => "Fixed Count",
+                            RepeatMode::Infinite => "Infinite",
+                            RepeatMode::Duration => "Duration",
+                        };
+                        ui.centered_and_justified(|ui| {
+                            ui.label(
+                                RichText::new(format!(
+                                    "{mode_str} \u{00B7} {}/{} steps \u{00B7} {}ms",
+                                    self.cached_enabled_count,
+                                    self.profile.actions.len(),
+                                    self.cached_cycle_wait_ms
+                                ))
+                                .size(10.5)
+                                .color(TEXT_MUTED),
+                            );
+                        });
+                    });
+                },
+            );
         });
     }
 
@@ -2666,7 +2717,7 @@ impl KTapApp {
                 filter_resp.request_focus();
             }
             if !self.filter_query.is_empty() {
-                let clear_clicked = ghost_button(ui, "\u{2715}", TEXT_MUTED)
+                let clear_clicked = ghost_button(ui, "\u{00D7}", TEXT_MUTED)
                     .on_hover_text("Clear filter (Esc)")
                     .clicked();
                 let clear_esc =
@@ -2774,6 +2825,8 @@ impl KTapApp {
                 Vec2::new(left_w, avail_h),
                 egui::Layout::top_down(egui::Align::LEFT),
                 |ui| {
+                    ui.set_width(left_w);
+                    ui.set_max_width(left_w);
                     // Quick-Forge DSL Card
                     panel_frame().show(ui, |ui| {
                         ui.horizontal(|ui| {
@@ -3008,7 +3061,7 @@ impl KTapApp {
                                                         |ui| {
                                                             if ghost_button(
                                                                 ui,
-                                                                "\u{2715}",
+                                                                "\u{00D7}",
                                                                 TEXT_MUTED,
                                                             )
                                                             .clicked()
@@ -3022,7 +3075,7 @@ impl KTapApp {
                                                             }
                                                             if ghost_button(
                                                                 ui,
-                                                                "\u{25BC}",
+                                                                "Dn",
                                                                 TEXT_MUTED,
                                                             )
                                                             .clicked()
@@ -3031,7 +3084,7 @@ impl KTapApp {
                                                             }
                                                             if ghost_button(
                                                                 ui,
-                                                                "\u{25B2}",
+                                                                "Up",
                                                                 TEXT_MUTED,
                                                             )
                                                             .clicked()
@@ -3221,7 +3274,10 @@ impl KTapApp {
                 Vec2::new(right_w, avail_h),
                 egui::Layout::top_down(egui::Align::LEFT),
                 |ui| {
+                    ui.set_width(right_w);
+                    ui.set_max_width(right_w);
                     panel_frame().show(ui, |ui| {
+                        ui.set_width((right_w - 24.0).max(200.0));
                         ui.set_min_height((avail_h - 24.0).max(200.0));
                         egui::Frame::none()
                             .fill(BG_INPUT)
@@ -3452,7 +3508,7 @@ impl KTapApp {
                                     let (txt, fill, fg, border) = if is_rec {
                                         (
                                             format!(
-                                                "\u{23F9} Stop Recording ({})",
+                                                "\u{25A0} Stop Recording ({})",
                                                 self.profile.record_hotkey
                                             ),
                                             ACCENT_WARNING,
@@ -3462,7 +3518,7 @@ impl KTapApp {
                                     } else {
                                         (
                                             format!(
-                                                "\u{25CF} Record Live Inputs ({})",
+                                                "\u{2022} Record Live Inputs ({})",
                                                 self.profile.record_hotkey
                                             ),
                                             BTN_DANGER_SUBTLE,
@@ -3546,7 +3602,7 @@ impl KTapApp {
                                                 .max_height((avail_h - 190.0).max(120.0))
                                                 .show(ui, |ui| {
                                                     let report_str = if self.last_audit.is_clean() {
-                                                        "\u{2713} STATIC SECURITY AUDIT PASSED\n\n\
+                                                        "STATIC SECURITY AUDIT PASSED\n\n\
                                                          \u{2022} Zero arbitrary code execution vectors\n\
                                                          \u{2022} Safe cycle wait timing verified\n\
                                                          \u{2022} All key/mouse down states balanced\n\
@@ -3848,5 +3904,204 @@ impl eframe::App for KTapApp {
             self.executor.panic_abort(Duration::from_millis(200));
         }
         self.os_backend.close();
+    }
+}
+
+#[cfg(feature = "screenshots")]
+impl KTapApp {
+    pub fn capture_screenshots(out_dir: std::path::PathBuf) -> eframe::Result<()> {
+        let mut vp = egui::ViewportBuilder::default()
+            .with_inner_size([1240.0, 800.0])
+            .with_min_inner_size([320.0, 64.0]);
+        if let Some(icon) = load_window_icon_data() {
+            vp = vp.with_icon(icon);
+        }
+        let options = eframe::NativeOptions {
+            viewport: vp,
+            ..Default::default()
+        };
+
+        #[derive(Clone, Copy)]
+        enum Scene {
+            Studio,
+            Security,
+            Simple,
+            StepInspector,
+            Updater,
+            MiniHud,
+        }
+
+        struct ScreenshotRunner {
+            app: KTapApp,
+            out_dir: std::path::PathBuf,
+            step_idx: usize,
+            wait_frames: u32,
+            awaiting_shot: bool,
+        }
+
+        impl ScreenshotRunner {
+            const SCENES: [Scene; 6] = [
+                Scene::Studio,
+                Scene::Security,
+                Scene::Simple,
+                Scene::StepInspector,
+                Scene::Updater,
+                Scene::MiniHud,
+            ];
+
+            fn filename(scene: Scene) -> &'static str {
+                match scene {
+                    Scene::Studio => "studio_mode.png",
+                    Scene::Security => "security_audit.png",
+                    Scene::Simple => "simple_mode.png",
+                    Scene::StepInspector => "step_inspector.png",
+                    Scene::Updater => "updater_modal.png",
+                    Scene::MiniHud => "mini_hud.png",
+                }
+            }
+
+            fn configure_scene(&mut self, ctx: &Context, scene: Scene) {
+                self.app.step_dialog = None;
+                self.app.update_dialog = None;
+                self.app.mini_hud_active = false;
+                self.app.selected_step_index = None;
+                match scene {
+                    Scene::Studio => {
+                        ctx.send_viewport_cmd(ViewportCommand::Decorations(true));
+                        ctx.send_viewport_cmd(ViewportCommand::InnerSize(egui::vec2(
+                            1240.0, 800.0,
+                        )));
+                        self.app.ui_mode = UiMode::Studio;
+                        self.app.inspector_tab = InspectorTab::LoopKeys;
+                        self.app.selected_step_index = Some(0);
+                    }
+                    Scene::Security => {
+                        ctx.send_viewport_cmd(ViewportCommand::Decorations(true));
+                        ctx.send_viewport_cmd(ViewportCommand::InnerSize(egui::vec2(
+                            1240.0, 800.0,
+                        )));
+                        self.app.ui_mode = UiMode::Studio;
+                        self.app.inspector_tab = InspectorTab::Security;
+                        self.app.refresh_security_details();
+                    }
+                    Scene::Simple => {
+                        ctx.send_viewport_cmd(ViewportCommand::Decorations(true));
+                        ctx.send_viewport_cmd(ViewportCommand::InnerSize(egui::vec2(
+                            1120.0, 760.0,
+                        )));
+                        self.app.ui_mode = UiMode::Simple;
+                        self.app.simple_task = SimpleTask::Spammer;
+                        self.app.ss_interval_ms = 50;
+                        self.app.apply_simple_spammer_to_profile(false);
+                    }
+                    Scene::StepInspector => {
+                        ctx.send_viewport_cmd(ViewportCommand::Decorations(true));
+                        ctx.send_viewport_cmd(ViewportCommand::InnerSize(egui::vec2(960.0, 640.0)));
+                        self.app.ui_mode = UiMode::Studio;
+                        self.app.inspector_tab = InspectorTab::LoopKeys;
+                        if let Some(act) = self.app.profile.actions.first() {
+                            self.app.step_dialog = Some(StepEditorState::from_action(act));
+                        }
+                    }
+                    Scene::Updater => {
+                        ctx.send_viewport_cmd(ViewportCommand::Decorations(true));
+                        ctx.send_viewport_cmd(ViewportCommand::InnerSize(egui::vec2(960.0, 620.0)));
+                        self.app.ui_mode = UiMode::Studio;
+                        self.app.update_dialog = Some(UpdateDialogState::new(Some(ReleaseInfo {
+                            tag_name: "v1.0.0".to_string(),
+                            version: "1.0.0".to_string(),
+                            name: "1.0.0".to_string(),
+                            body: "kTap 1.0.0 — Initial native Rust release with Simple & Studio modes, Linux Wayland + X11, macOS, Windows engines, SHA-256 signed profiles, and verified auto-updater.".to_string(),
+                            html_url: "https://github.com/efeartn/kTap/releases/tag/v1.0.0".to_string(),
+                            published_at: "2026-11-28T00:00:00Z".to_string(),
+                            prerelease: false,
+                            asset_name: Some("kTap-Windows-x64.exe".to_string()),
+                            download_url: Some("https://github.com/efeartn/kTap/releases/download/v1.0.0/kTap-Windows-x64.exe".to_string()),
+                            asset_size: Some(5_847_552),
+                            sha256: Some("e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855".to_string()),
+                            checksum_url: None,
+                            is_update_available: false,
+                        })));
+                    }
+                    Scene::MiniHud => {
+                        ctx.send_viewport_cmd(ViewportCommand::Decorations(false));
+                        ctx.send_viewport_cmd(ViewportCommand::InnerSize(egui::vec2(432.0, 70.0)));
+                    }
+                }
+                self.wait_frames = 0;
+                self.awaiting_shot = false;
+            }
+        }
+
+        impl eframe::App for ScreenshotRunner {
+            fn update(&mut self, ctx: &Context, frame: &mut eframe::Frame) {
+                if self.step_idx >= Self::SCENES.len() {
+                    ctx.send_viewport_cmd(ViewportCommand::Close);
+                    return;
+                }
+                let captured = ctx.input(|i| {
+                    i.events.iter().find_map(|e| match e {
+                        egui::Event::Screenshot { image, .. } => Some(image.clone()),
+                        _ => None,
+                    })
+                });
+                if let Some(img) = captured {
+                    let scene = Self::SCENES[self.step_idx];
+                    let path = self.out_dir.join(Self::filename(scene));
+                    crate::ui::theme::save_screenshot_image(&img, &path);
+                    self.step_idx += 1;
+                    self.awaiting_shot = false;
+                    if self.step_idx >= Self::SCENES.len() {
+                        ctx.send_viewport_cmd(ViewportCommand::Close);
+                        return;
+                    }
+                    self.configure_scene(ctx, Self::SCENES[self.step_idx]);
+                }
+
+                let scene = Self::SCENES[self.step_idx];
+                if matches!(scene, Scene::MiniHud) {
+                    let telem = self.app.executor.telemetry();
+                    let _ = crate::ui::mini_hud::draw_mini_hud_contents(
+                        ctx,
+                        &telem,
+                        false,
+                        None,
+                        &self.app.profile.start_stop_hotkey,
+                        &self.app.profile.panic_hotkey,
+                    );
+                } else {
+                    self.app.update(ctx, frame);
+                }
+
+                self.wait_frames += 1;
+                if self.wait_frames >= 8 && !self.awaiting_shot {
+                    self.awaiting_shot = true;
+                    ctx.send_viewport_cmd(ViewportCommand::Screenshot);
+                }
+                ctx.request_repaint();
+            }
+
+            fn on_exit(&mut self, gl: Option<&eframe::glow::Context>) {
+                self.app.on_exit(gl);
+            }
+        }
+
+        let title = format!("kTap {}", full_version_label());
+        eframe::run_native(
+            &title,
+            options,
+            Box::new(move |cc| {
+                apply_theme(&cc.egui_ctx);
+                let mut runner = ScreenshotRunner {
+                    app: KTapApp::new(cc.egui_ctx.clone(), false),
+                    out_dir,
+                    step_idx: 0,
+                    wait_frames: 0,
+                    awaiting_shot: false,
+                };
+                runner.configure_scene(&cc.egui_ctx, ScreenshotRunner::SCENES[0]);
+                Ok(Box::new(runner))
+            }),
+        )
     }
 }

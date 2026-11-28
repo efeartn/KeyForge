@@ -47,14 +47,10 @@ use tempfile::TempDir;
 
 #[test]
 fn test_version_and_keymap_resolution() {
-    assert_eq!(VERSION, "3.0.0");
-    assert_eq!(CODENAME, "Pulse");
-    assert_eq!(full_version_label(), "v3.0.0 \"Pulse\"");
-    assert_eq!(codename_for_version("v1.0.0"), Some("Ignition"));
-    assert_eq!(codename_for_version("1.6.1"), Some("Shield"));
-    assert_eq!(codename_for_version("v2.0.0"), Some("Ironclad"));
-    assert_eq!(codename_for_version("v2.1.0"), Some("Waystone"));
-    assert_eq!(codename_for_version("v3.0.0-rc.1"), Some("Pulse"));
+    assert_eq!(VERSION, "1.0.0");
+    assert_eq!(CODENAME, "");
+    assert_eq!(full_version_label(), "1.0.0");
+    assert_eq!(codename_for_version("v1.0.0"), None);
     assert_eq!(codename_for_version("9.9.9"), None);
     for &(ver, name) in RELEASE_CODENAMES {
         assert_eq!(codename_for_version(ver), Some(name));
@@ -354,10 +350,10 @@ fn test_config_persistence_backup_and_legacy_migration() {
 
 #[test]
 fn test_updater_semver_assets_and_windows_hotswap() {
-    assert_eq!(parse_semver("v3.0.0").unwrap().major, 3);
-    assert!(is_version_newer("2.1.0", "3.0.0").unwrap());
-    assert!(is_version_newer("3.0.0-rc.1", "3.0.0").unwrap());
-    assert!(!is_version_newer("3.0.0", "3.0.0").unwrap());
+    assert_eq!(parse_semver("v1.0.0").unwrap().major, 1);
+    assert!(is_version_newer("0.9.0", "1.0.0").unwrap());
+    assert!(is_version_newer("1.0.0-rc.1", "1.0.0").unwrap());
+    assert!(!is_version_newer("1.0.0", "1.0.0").unwrap());
 
     assert!(validate_https_url("https://github.com/efeartn/kTap").is_ok());
     assert!(validate_https_url("http://github.com/efeartn/kTap").is_err());
@@ -402,7 +398,7 @@ fn test_updater_semver_assets_and_windows_hotswap() {
         "html_url": "https://github.com/efeartn/kTap/releases/tag/v9.9.9",
         "assets": assets
     });
-    let rel = parse_release_payload_value(&payload, "3.0.0", None).unwrap();
+    let rel = parse_release_payload_value(&payload, "1.0.0", None).unwrap();
     assert!(rel.is_update_available);
 
     // Non-destructive staged PowerShell hot-swap script check
@@ -507,7 +503,7 @@ fn test_installer_host_protection_and_cli_binary() {
     assert!(v_out.status.success());
     assert_eq!(
         String::from_utf8_lossy(&v_out.stdout).trim(),
-        format!("kTap v{VERSION} \"{CODENAME}\"")
+        format!("kTap {}", full_version_label())
     );
 
     let wl_out = Command::new(exe).arg("--wayland-setup").output().unwrap();

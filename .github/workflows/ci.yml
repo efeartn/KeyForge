@@ -141,7 +141,7 @@ jobs:
           cat *.sha256.txt > SHA256SUMS.txt
           ls -lh
 
-      - name: Resolve Release Codename & Sync Historical Releases
+      - name: Resolve Release Title
         id: codename
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
