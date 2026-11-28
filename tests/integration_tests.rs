@@ -41,13 +41,23 @@ use keyforge::updater::{
     get_platform_asset_candidates, is_version_newer, parse_release_payload_value, parse_semver,
     select_platform_asset, validate_https_url,
 };
-use keyforge::VERSION;
+use keyforge::{codename_for_version, full_version_label, CODENAME, RELEASE_CODENAMES, VERSION};
 use serde_json::json;
 use tempfile::TempDir;
 
 #[test]
 fn test_version_and_keymap_resolution() {
-    assert_eq!(VERSION, "2.0.0");
+    assert_eq!(VERSION, "2.1.0");
+    assert_eq!(CODENAME, "Waystone");
+    assert_eq!(full_version_label(), "v2.1.0 \"Waystone\"");
+    assert_eq!(codename_for_version("v1.0.0"), Some("Ignition"));
+    assert_eq!(codename_for_version("1.6.1"), Some("Shield"));
+    assert_eq!(codename_for_version("v2.0.0"), Some("Ironclad"));
+    assert_eq!(codename_for_version("v2.1.0-rc.1"), Some("Waystone"));
+    assert_eq!(codename_for_version("9.9.9"), None);
+    for &(ver, name) in RELEASE_CODENAMES {
+        assert_eq!(codename_for_version(ver), Some(name));
+    }
 
     assert_eq!(resolve_single_key("e").unwrap().canonical_name, "E");
     assert_eq!(resolve_single_key("cmd").unwrap().canonical_name, "Win");
@@ -465,8 +475,12 @@ fn test_installer_host_protection_and_cli_binary() {
     assert!(v_out.status.success());
     assert_eq!(
         String::from_utf8_lossy(&v_out.stdout).trim(),
-        format!("KeyForge v{VERSION}")
+        format!("KeyForge v{VERSION} \"{CODENAME}\"")
     );
+
+    let wl_out = Command::new(exe).arg("--wayland-setup").output().unwrap();
+    assert!(wl_out.status.success());
+    assert!(String::from_utf8_lossy(&wl_out.stdout).contains("/dev/uinput"));
 
     let exported = tmp.path().join("exported.kfmacro.json");
     let exp_out = Command::new(exe)
@@ -494,4 +508,34 @@ fn test_installer_host_protection_and_cli_binary() {
         .unwrap();
     assert!(dry_out.status.success());
     assert!(String::from_utf8_lossy(&dry_out.stdout).contains("cycles=2"));
+}
+
+#[cfg(target_os = "linux")]
+#[test]
+fn test_linux_wayland_uinput_mapping_and_fallback() {
+    use keyforge::engine::backend::InputBackend;
+    use keyforge::engine::platform::wayland_udev_setup_command;
+    use keyforge::engine::platform_linux_wayland::{
+        mouse_button_to_evdev, vk_to_linux_evdev_key, LinuxWaylandUinputBackend,
+    };
+
+    assert!(wayland_udev_setup_command().contains("99-keyforge-uinput.rules"));
+    assert_eq!(vk_to_linux_evdev_key(0x1B), Some(1)); // Esc
+    assert_eq!(vk_to_linux_evdev_key(0x45), Some(18)); // E
+    assert_eq!(vk_to_linux_evdev_key(0x11), Some(29)); // LeftCtrl
+    assert_eq!(vk_to_linux_evdev_key(0x75), Some(64)); // F6
+    assert_eq!(vk_to_linux_evdev_key(0x7B), Some(88)); // F12
+    assert_eq!(vk_to_linux_evdev_key(0x5B), Some(125)); // Super / Win
+    assert_eq!(mouse_button_to_evdev(MouseButton::Left), 0x110);
+    assert_eq!(mouse_button_to_evdev(MouseButton::Right), 0x111);
+
+    // Must initialize safely without panicking even inside headless CI without /dev/uinput.
+    let backend = LinuxWaylandUinputBackend::new();
+    let e_key = resolve_single_key("E").unwrap();
+    backend.key_down(e_key);
+    backend.key_up(e_key);
+    backend.move_cursor(120, 240, false);
+    assert_eq!(backend.get_cursor_pos(), (120, 240));
+    backend.scroll(0, -3);
+    backend.close();
 }

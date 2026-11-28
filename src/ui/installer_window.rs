@@ -13,6 +13,7 @@ use crate::ui::theme::{
     ACCENT_SUCCESS, BG_INPUT, BG_PANEL, BORDER_CONTROL, BORDER_SUBTLE, BTN_NEUTRAL, CTA_SUCCESS,
     CTA_TEXT, TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY,
 };
+use crate::CODENAME;
 use crate::VERSION;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -60,9 +61,9 @@ impl InstallerWindow {
 
     pub fn run(mode: InstallerMode, install_dir: Option<PathBuf>) -> eframe::Result<()> {
         let title = if mode == InstallerMode::Uninstall {
-            format!("Uninstall KeyForge v{VERSION}")
+            format!("Uninstall KeyForge v{VERSION} \"{CODENAME}\"")
         } else {
-            format!("KeyForge v{VERSION} Setup")
+            format!("KeyForge v{VERSION} \"{CODENAME}\" Setup")
         };
         let mut vp = egui::ViewportBuilder::default()
             .with_inner_size([540.0, 440.0])
@@ -158,9 +159,9 @@ impl eframe::App for InstallerWindow {
                     }
                     ui.vertical(|ui| {
                         let heading = if self.mode == InstallerMode::Setup {
-                            format!("KeyForge v{VERSION} Setup")
+                            format!("KeyForge v{VERSION} \"{CODENAME}\" Setup")
                         } else {
-                            format!("Uninstall KeyForge v{VERSION}")
+                            format!("Uninstall KeyForge v{VERSION} \"{CODENAME}\"")
                         };
                         let subtitle = if self.mode == InstallerMode::Setup {
                             "Install KeyForge on this computer while preserving existing configs & macros"

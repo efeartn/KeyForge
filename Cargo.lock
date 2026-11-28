@@ -1740,7 +1740,7 @@ dependencies = [
 
 [[package]]
 name = "keyforge"
-version = "2.0.0"
+version = "2.1.0"
 dependencies = [
  "base64",
  "chrono",
@@ -1749,6 +1749,7 @@ dependencies = [
  "egui",
  "hex",
  "image",
+ "libc",
  "libloading",
  "open",
  "rand 0.8.8",

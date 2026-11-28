@@ -10,7 +10,7 @@ use clap::Parser;
 
 use keyforge::engine::backend::DryRunBackend;
 use keyforge::engine::executor::{ExecutorState, MacroExecutor};
-use keyforge::engine::platform::create_os_input_backend;
+use keyforge::engine::platform::{create_os_input_backend, wayland_udev_setup_command};
 use keyforge::installer::{install_keyforge, is_running_as_setup_installer, uninstall_keyforge};
 use keyforge::models::dsl::{format_actions_to_dsl, parse_quick_expression};
 use keyforge::models::profile::{create_default_profile, MacroProfile, RepeatMode};
@@ -18,7 +18,7 @@ use keyforge::security::auditor::audit_profile;
 use keyforge::security::integrity::{load_profile_secure, save_profile_secure};
 use keyforge::ui::app::KeyForgeApp;
 use keyforge::ui::installer_window::{InstallerMode, InstallerWindow};
-use keyforge::VERSION;
+use keyforge::{CODENAME, VERSION};
 
 #[derive(Parser, Debug)]
 #[command(
@@ -82,6 +82,10 @@ struct Cli {
     /// Optional custom installation directory for --install or --uninstall.
     #[arg(long)]
     install_dir: Option<PathBuf>,
+
+    /// Print the Linux Wayland udev permission setup command for /dev/uinput and exit.
+    #[arg(long)]
+    wayland_setup: bool,
 }
 
 #[cfg(target_os = "windows")]
@@ -90,11 +94,12 @@ fn attach_parent_console_if_needed(has_cli_args: bool) {
         return;
     }
     unsafe {
+        use windows_sys::Win32::Foundation::INVALID_HANDLE_VALUE;
         use windows_sys::Win32::System::Console::{
             AttachConsole, GetStdHandle, ATTACH_PARENT_PROCESS, STD_OUTPUT_HANDLE,
         };
         let handle = GetStdHandle(STD_OUTPUT_HANDLE);
-        if handle.is_null() {
+        if handle.is_null() || handle == INVALID_HANDLE_VALUE {
             let _ = AttachConsole(ATTACH_PARENT_PROCESS);
         }
     }
@@ -200,7 +205,15 @@ fn main() {
     let cli = Cli::parse();
 
     if cli.version {
-        println!("KeyForge v{VERSION}");
+        println!("KeyForge v{VERSION} \"{CODENAME}\"");
+        std::process::exit(0);
+    }
+
+    if cli.wayland_setup {
+        println!(
+            "Linux Wayland Setup (grant user access to /dev/uinput & /dev/input/event*):\n\n  {}\n\nLog out and back in (or reboot) after running so group membership takes effect.",
+            wayland_udev_setup_command()
+        );
         std::process::exit(0);
     }
 

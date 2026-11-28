@@ -12,3 +12,6 @@ pub mod platform_macos;
 
 #[cfg(target_os = "linux")]
 pub mod platform_linux;
+
+#[cfg(target_os = "linux")]
+pub mod platform_linux_wayland;

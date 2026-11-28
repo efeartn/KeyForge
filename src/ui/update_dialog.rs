@@ -16,7 +16,7 @@ use crate::updater::{
     apply_update_and_restart, download_update_asset, fetch_latest_release, ReleaseInfo,
     DEFAULT_REPO,
 };
-use crate::VERSION;
+use crate::{codename_for_version, CODENAME, VERSION};
 
 enum UpdateMsg {
     CheckOk(Box<ReleaseInfo>),
@@ -58,7 +58,7 @@ impl UpdateDialogState {
             is_downloading: false,
             cancel_flag: Arc::new(AtomicBool::new(false)),
             progress_frac: 0.0,
-            status_title: format!("KeyForge v{VERSION}"),
+            status_title: format!("KeyForge v{VERSION} \"{CODENAME}\""),
             meta_text: "Checking GitHub Releases...".to_string(),
             progress_text: String::new(),
             notes_text: String::new(),
@@ -86,8 +86,12 @@ impl UpdateDialogState {
             rel.body.clone()
         };
 
+        let rel_codename_suffix = codename_for_version(&rel.version)
+            .map(|c| format!(" \"{c}\""))
+            .unwrap_or_default();
         if rel.is_update_available {
-            self.status_title = format!("Update Available: v{}", rel.version);
+            self.status_title =
+                format!("Update Available: v{}{}", rel.version, rel_codename_suffix);
             let sha_hint = rel
                 .sha256
                 .as_ref()
@@ -109,8 +113,11 @@ impl UpdateDialogState {
                     "No matching binary asset found for this OS. Use Release Page.".to_string();
             }
         } else {
-            self.status_title = format!("You're Up to Date (v{VERSION})");
-            self.meta_text = format!("Latest release on GitHub: v{}", rel.version);
+            self.status_title = format!("You're Up to Date (v{VERSION} \"{CODENAME}\")");
+            self.meta_text = format!(
+                "Latest release on GitHub: v{}{}",
+                rel.version, rel_codename_suffix
+            );
             self.progress_text = "KeyForge is running the latest version.".to_string();
         }
     }

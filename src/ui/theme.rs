@@ -261,3 +261,22 @@ pub fn styled_button(
         .rounding(Rounding::same(7.0)),
     )
 }
+
+pub fn ghost_button(ui: &mut egui::Ui, text: &str, text_color: Color32) -> egui::Response {
+    ui.add(
+        egui::Button::new(egui::RichText::new(text).color(text_color).size(11.5))
+            .fill(Color32::TRANSPARENT)
+            .stroke(Stroke::NONE)
+            .rounding(Rounding::same(6.0)),
+    )
+}
+
+pub fn pill_badge(ui: &mut egui::Ui, text: &str, bg: Color32, fg: Color32) {
+    egui::Frame::none()
+        .fill(bg)
+        .rounding(Rounding::same(6.0))
+        .inner_margin(egui::Margin::symmetric(7.0, 2.0))
+        .show(ui, |ui| {
+            ui.label(egui::RichText::new(text).size(10.0).strong().color(fg));
+        });
+}

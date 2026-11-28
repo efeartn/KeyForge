@@ -29,7 +29,7 @@ pub fn show_mini_hud(
     let vp_id = ViewportId::from_hash_of("keyforge_mini_hud");
     let builder = ViewportBuilder::default()
         .with_title("KeyForge HUD")
-        .with_inner_size([420.0, 68.0])
+        .with_inner_size([432.0, 70.0])
         .with_resizable(false)
         .with_always_on_top();
 

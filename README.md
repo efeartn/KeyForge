@@ -14,7 +14,7 @@ Free, Open-Source (`GPL-3.0-or-later`), Cybersecurity-Hardened, Obsidian & Mint 
 [![Security: SHA-256 Signed + Static Auditor](https://img.shields.io/badge/Security-SHA--256%20Verified%20%2B%20Static%20Auditor-10B981)](SECURITY.md)
 [![License: GPL-3.0](https://img.shields.io/badge/License-GPL--3.0-8B5CF6.svg)](LICENSE)
 
-[**Download v2.0.0**](#download-standalone-executables) • [**Release Notes**](RELEASE_NOTES.md) • [**Visual Tour**](#visual-tour) • [**Cross-Platform Engine**](#cross-platform-support-windows--macos--linux) • [**Setup Installer & Updater**](#setup-installer--auto-updater) • [**Sequence DSL**](#sequence-dsl-reference) • [**Cybersecurity**](#cybersecurity--safety-engineering) • [**CLI & Source**](#installation--quick-start)
+[![Download v2.1.0 "Waystone"](https://img.shields.io/badge/Latest-v2.1.0%20%22Waystone%22-2EE59D)](#download-standalone-executables) • [**Release Notes**](RELEASE_NOTES.md) • [**Visual Tour**](#visual-tour) • [**Cross-Platform Engine**](#cross-platform-support-windows--macos--linux) • [**Setup Installer & Updater**](#setup-installer--auto-updater) • [**Release Codenames**](#release-codenames) • [**Sequence DSL**](#sequence-dsl-reference) • [**Cybersecurity**](#cybersecurity--safety-engineering) • [**CLI & Source**](#installation--quick-start)
 
 </div>
 
@@ -47,7 +47,7 @@ KeyForge adapts smoothly from quick keyboard automation to full multi-step seque
         <li><b>Two Synchronized Modes:</b> Toggle cleanly between <b>Simple</b> (Key Repeater &amp; Quick Sequence) and <b>Studio</b> (4-card hero strip + timeline) with live bidirectional profile, delay, and repeat-count sync.</li>
         <li><b>Click-to-Bind Key Capture &amp; Presets:</b> Click <b>Bind Key</b> to capture any physical key or modifier combo (e.g. <code>Ctrl+Shift+F</code> or <code>Cmd+C</code> on macOS), use speed presets (<code>25ms–500ms</code>), or save custom profiles via <b>+ Save Preset</b>.</li>
         <li><b>Fast Step Filtering &amp; Shortcuts:</b> Slice steps by <b>Keys</b>, <b>Waits</b>, or <b>Mouse</b>, press <code>/</code> to filter, and manage visible rows safely via <code>Del</code>, <code>Ctrl+D</code> / <code>⌘D</code>, <code>Space</code>, and <code>Alt+↑/↓</code>.</li>
-        <li><b>Native Rust Efficiency:</b> Rewritten 100% in compiled native Rust (<code>eframe</code> / <code>egui</code> + <code>glow</code>) with zero Python interpreter, zero Electron/WebView subprocesses, a <b>5.84 MB</b> standalone Windows executable (<code>6,124,032</code> bytes), and <b>0.065%</b> idle CPU on Windows (<code>142.13 MB</code> private OpenGL WGL context footprint).</li>
+        <li><b>Native Rust Efficiency:</b> Rewritten 100% in compiled native Rust (<code>eframe</code> / <code>egui</code> + <code>glow</code>) with zero Python interpreter, zero Electron/WebView subprocesses, a <b>5.57 MB</b> standalone Windows executable (<code>5,841,408</code> bytes), and <b>0.032%</b> idle CPU on Windows (<code>89.48 MB</code> private / <code>91.1 MB</code> working set OpenGL context).</li>
       </ul>
     </td>
   </tr>
@@ -113,8 +113,8 @@ Every tagged release is compiled with Cargo `--release`, checked with `rustfmt` 
 
 | Operating System | Variant | Standalone Binary | Checksum Manifest |
 | :--- | :--- | :--- | :--- |
-| **Windows 10 / 11** (`x64`) | **Setup Installer** (Shortcuts + Uninstaller) | [**`KeyForge-Setup-Windows-x64.exe`**](https://github.com/efeartn/KeyForge/releases/latest/download/KeyForge-Setup-Windows-x64.exe) | [`KeyForge-Setup-Windows-x64.sha256.txt`](https://github.com/efeartn/KeyForge/releases/latest/download/KeyForge-Setup-Windows-x64.sha256.txt) |
-| **Windows 10 / 11** (`x64`) | **Portable Single-File** | [**`KeyForge-Windows-x64.exe`**](https://github.com/efeartn/KeyForge/releases/latest/download/KeyForge-Windows-x64.exe) | [`KeyForge-Windows-x64.sha256.txt`](https://github.com/efeartn/KeyForge/releases/latest/download/KeyForge-Windows-x64.sha256.txt) |
+| **Windows 10 / 11** (`x64`) | **Setup Installer** (Shortcuts + Uninstaller) | [**`KeyForge-Setup-Windows-x64.exe`**](https://github.com/efeartn/KeyForge/releases/latest/download/KeyForge-Setup-Windows-x64.exe) | [`KeyForge-Setup-Windows-x64.exe.sha256.txt`](https://github.com/efeartn/KeyForge/releases/latest/download/KeyForge-Setup-Windows-x64.exe.sha256.txt) |
+| **Windows 10 / 11** (`x64`) | **Portable Single-File** | [**`KeyForge-Windows-x64.exe`**](https://github.com/efeartn/KeyForge/releases/latest/download/KeyForge-Windows-x64.exe) | [`KeyForge-Windows-x64.exe.sha256.txt`](https://github.com/efeartn/KeyForge/releases/latest/download/KeyForge-Windows-x64.exe.sha256.txt) |
 | **macOS** (`arm64`) | **Apple Silicon Standalone** | [**`KeyForge-macOS-arm64`**](https://github.com/efeartn/KeyForge/releases/latest/download/KeyForge-macOS-arm64) | [`KeyForge-macOS-arm64.sha256.txt`](https://github.com/efeartn/KeyForge/releases/latest/download/KeyForge-macOS-arm64.sha256.txt) |
 | **Linux** (`x86_64`) | **Standalone ELF Binary** | [**`KeyForge-Linux-x64`**](https://github.com/efeartn/KeyForge/releases/latest/download/KeyForge-Linux-x64) | [`KeyForge-Linux-x64.sha256.txt`](https://github.com/efeartn/KeyForge/releases/latest/download/KeyForge-Linux-x64.sha256.txt) |
 
@@ -147,7 +147,26 @@ KeyForge injects live keyboard/mouse events, polls global hotkeys, and captures 
 | :--- | :--- | :--- |
 | **Windows 10 / 11** | `Win32InputBackend` (`src/engine/platform_win32.rs`: `SendInput`, `GetAsyncKeyState`) | Works immediately out of the box with `0x4B465247` self-filter signature |
 | **macOS (Apple Silicon / Intel)** | `MacOSInputBackend` (`src/engine/platform_macos.rs`: `CGEventPost`, non-variadic scroll, `CGEventSourceKeyState`) | Grant **Accessibility** permission in *System Settings → Privacy & Security → Accessibility* for live injection & global hotkeys; supports `Cmd` / `Option` aliases and `⌘` shortcuts |
-| **Linux (`x86_64` / `arm64`)** | `LinuxX11InputBackend` (`src/engine/platform_linux.rs`: `libX11` + `libXtst`, dedicated `Display*`, `XQueryKeymap`) | Works on X11 and XWayland windows (`libxtst6` required; isolated pure-Wayland sessions fall back safely to Dry-Run Simulation with guidance) |
+| **Linux (`x86_64` / `arm64`) — Wayland & X11** | `LinuxWaylandUinputBackend` (`src/engine/platform_linux_wayland.rs`: `/dev/uinput` + `evdev` polling) + `LinuxX11InputBackend` (`src/engine/platform_linux.rs`: `libX11` + `libXtst`) | Native injection & global hotkeys on Wayland compositors (GNOME, KDE, Sway, Hyprland) via `/dev/uinput` + automatic `XWayland` / `X11` fallback. Run `keyforge --wayland-setup` (or click **Copy Setup Cmd** in-app) to grant `/dev/uinput` permissions without running as root. |
+
+---
+
+## Release Codenames
+
+Git tags stay clean SemVer (`vX.Y.Z`) for strict auto-updater compatibility, while GitHub Releases and KeyForge's in-app/CLI chrome sync cleanly to each release's forge codename:
+
+| Version | Codename | Milestone |
+| :--- | :--- | :--- |
+| **`v2.1.0`** | **Waystone** | Minimalist geometric icon, native Linux Wayland `uinput`/`evdev` backend, UI craft polish & Node 24 CI |
+| **`v2.0.0`** | **Ironclad** | Complete pure native Rust (`eframe`/`egui` + FFI) rewrite |
+| **`v1.6.1`** | **Shield** | Non-destructive Windows staged hot-swap & host shortcut protection |
+| **`v1.6.0`** | **Alloy** | Cross-platform macOS CoreGraphics & Linux X11/XTest engines |
+| **`v1.5.0`** | **Obsidian** | Obsidian & Mint Emerald UI overhaul + 4-Card Hero Strip |
+| **`v1.4.0`** | **Temper** | Craft UI interactive key capture & timeline shortcuts |
+| **`v1.3.0`** | **Quench** | Setup Installer wizard, floating Mini HUD & custom presets |
+| **`v1.2.0`** | **Carbon** | Apple minimalist surface pass, SHA-256 updater & atomic config |
+| **`v1.1.0`** | **Titanium** | GPL-3.0 open-source license & security hardening |
+| **`v1.0.0`** | **Ignition** | Initial public KeyForge macro studio & auto-clicker release |
 
 ---
 
@@ -248,7 +267,7 @@ flowchart LR
     SAN --> PLAT["Cross-Platform Backend Router<br/>(src/engine/platform.rs)"]
     PLAT --> WIN32["Win32 SendInput<br/>(Windows)"]
     PLAT --> MAC["CoreGraphics CGEvent<br/>(macOS)"]
-    PLAT --> X11["X11 / XTest<br/>(Linux)"]
+    PLAT --> X11["X11 / Wayland uinput<br/>(Linux)"]
     SAN --> DRY["DryRunBackend<br/>(Offline Simulator)"]
 ```
 
@@ -262,10 +281,11 @@ KeyForge/
 │   │   ├── backend.rs            # InputBackend Trait, Marker & DryRunBackend Simulator
 │   │   ├── executor.rs           # Interruptible MacroExecutor, Sanitizer & Telemetry
 │   │   ├── hotkeys.rs            # Adaptive Cross-Platform Global Hotkey Polling Thread
-│   │   ├── platform.rs           # Platform Backend Factory (Win32 / macOS / X11)
+│   │   ├── platform.rs           # Platform Backend Router (Win32 / macOS / Wayland / X11)
 │   │   ├── platform_win32.rs     # Native 64-bit Win32 SendInput & GetAsyncKeyState
 │   │   ├── platform_macos.rs     # Native macOS CoreGraphics CGEvent & AX Trust Check
 │   │   ├── platform_linux.rs     # Native Linux libX11 + libXtst Input & Query Backend
+│   │   ├── platform_linux_wayland.rs # Native Linux Wayland /dev/uinput & evdev Backend
 │   │   └── recorder.rs           # Live Input Recorder with Tap Coalescing & Combo Filter
 │   ├── models/
 │   │   ├── action.rs             # MacroAction Struct, ActionType & Bounds Validation
@@ -311,8 +331,11 @@ cargo run --release
 ### Command-Line Interface (CLI)
 
 ```bash
-# Check installed version
+# Check installed version & codename
 cargo run -- --version
+
+# Print the one-line Linux Wayland /dev/uinput setup command
+cargo run -- --wayland-setup
 
 # Simulate a Quick-Forge recipe in safe Dry-Run mode (no live OS inputs)
 cargo run -- --expr "Press E -> Wait 200ms -> Click -> Press 1" --repeat 3 --dry-run

@@ -17,7 +17,8 @@ use crate::engine::executor::{ExecutionTelemetry, ExecutorState, MacroExecutor};
 use crate::engine::hotkeys::GlobalHotkeyManager;
 use crate::engine::platform::{
     create_os_input_backend, get_platform_capabilities, platform_badge_label,
-    platform_get_cursor_pos, platform_supports_key_polling, PlatformInputCapabilities,
+    platform_get_cursor_pos, platform_supports_key_polling, wayland_udev_setup_command,
+    PlatformInputCapabilities,
 };
 use crate::engine::recorder::{MacroRecorder, RecorderConfig};
 use crate::models::action::{
@@ -37,19 +38,20 @@ use crate::security::validator::validate_profile_complexity;
 use crate::ui::mini_hud::{show_mini_hud, MiniHudAction};
 use crate::ui::step_dialog::{StepDialogOutcome, StepEditorState};
 use crate::ui::theme::{
-    action_visual_style, apply_theme, apply_windows_window_branding, card_frame,
-    load_brand_texture, load_window_icon_data, micro_heading, panel_frame, styled_button,
-    ACCENT_DANGER, ACCENT_PRIMARY, ACCENT_SUCCESS, ACCENT_WARNING, BADGE_CRIT_BG, BADGE_CRIT_FG,
-    BADGE_OK_BG, BADGE_WARN_BG, BADGE_WARN_FG, BANNER_ERR_BG, BANNER_ERR_BORDER, BANNER_ERR_FG,
-    BANNER_INFO_BG, BANNER_INFO_BORDER, BANNER_INFO_FG, BANNER_UPDATE_BG, BANNER_UPDATE_BORDER,
-    BANNER_UPDATE_FG, BANNER_WARN_BG, BANNER_WARN_BORDER, BANNER_WARN_FG, BG_CARD, BG_CARD_ACTIVE,
-    BG_CARD_HOVER, BG_ELEVATED, BG_INPUT, BG_PANEL, BG_ROOT, BORDER_CONTROL, BORDER_FOCUS,
-    BORDER_SUBTLE, BTN_DANGER_BORDER, BTN_DANGER_SUBTLE, BTN_DANGER_SUBTLE_TEXT, BTN_NEUTRAL,
-    BTN_SUBTLE, CTA_SUCCESS, CTA_TEXT, SEGMENT_ACTIVE, TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY,
+    action_visual_style, apply_theme, apply_windows_window_branding, card_frame, ghost_button,
+    load_brand_texture, load_window_icon_data, micro_heading, panel_frame, pill_badge,
+    styled_button, ACCENT_DANGER, ACCENT_PRIMARY, ACCENT_SUCCESS, ACCENT_WARNING, BADGE_CRIT_BG,
+    BADGE_CRIT_FG, BADGE_OK_BG, BADGE_WARN_BG, BADGE_WARN_FG, BANNER_ERR_BG, BANNER_ERR_BORDER,
+    BANNER_ERR_FG, BANNER_INFO_BG, BANNER_INFO_BORDER, BANNER_INFO_FG, BANNER_UPDATE_BG,
+    BANNER_UPDATE_BORDER, BANNER_UPDATE_FG, BANNER_WARN_BG, BANNER_WARN_BORDER, BANNER_WARN_FG,
+    BG_CARD, BG_CARD_ACTIVE, BG_CARD_HOVER, BG_ELEVATED, BG_INPUT, BG_PANEL, BG_ROOT,
+    BORDER_CONTROL, BORDER_FOCUS, BORDER_SUBTLE, BTN_DANGER_BORDER, BTN_DANGER_SUBTLE,
+    BTN_DANGER_SUBTLE_TEXT, BTN_NEUTRAL, BTN_SUBTLE, CTA_SUCCESS, CTA_TEXT, SEGMENT_ACTIVE,
+    TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY,
 };
 use crate::ui::update_dialog::{UpdateDialogAction, UpdateDialogState};
 use crate::updater::{fetch_latest_release, ReleaseInfo, DEFAULT_REPO};
-use crate::VERSION;
+use crate::{CODENAME, VERSION};
 
 const MAX_UNDO_HISTORY: usize = 40;
 const MAX_CONSOLE_LINES: usize = 200;
@@ -178,6 +180,7 @@ pub struct KeyForgeApp {
     save_preset_modal: Option<String>,
     latest_release: Option<ReleaseInfo>,
     update_banner_dismissed: bool,
+    platform_notice_dismissed: bool,
     startup_update_checking: bool,
     startup_update_rx: mpsc::Receiver<Option<ReleaseInfo>>,
 
@@ -199,7 +202,7 @@ impl KeyForgeApp {
             viewport: vp,
             ..Default::default()
         };
-        let title = format!("KeyForge v{VERSION}");
+        let title = format!("KeyForge v{VERSION} \"{CODENAME}\"");
         eframe::run_native(
             &title,
             options,
@@ -310,7 +313,7 @@ impl KeyForgeApp {
             last_telem_error: None,
             cursor_xy: (0, 0),
             console_lines: Vec::new(),
-            footer_status: format!("\u{25CF} Ready \u{2014} KeyForge v{VERSION}"),
+            footer_status: format!("\u{25CF} Ready \u{2014} KeyForge v{VERSION} \"{CODENAME}\""),
             toast: None,
             key_capture_target: None,
             step_dialog: None,
@@ -318,6 +321,7 @@ impl KeyForgeApp {
             save_preset_modal: None,
             latest_release: None,
             update_banner_dismissed: false,
+            platform_notice_dismissed: false,
             startup_update_checking: start_update_check,
             startup_update_rx,
             brand_tex: None,
@@ -331,7 +335,7 @@ impl KeyForgeApp {
         app.sync_profile_to_simple_spammer_fields();
         app.run_security_audit();
         app.log_event(&format!(
-            "KeyForge v{VERSION} ({} \u{00B7} {}) ready. Panic Stop armed on [{}].",
+            "KeyForge v{VERSION} \"{CODENAME}\" ({} \u{00B7} {}) ready. Panic Stop armed on [{}].",
             platform_badge_label(),
             app.platform_caps.backend_name,
             app.profile.panic_hotkey
@@ -1389,18 +1393,13 @@ impl KeyForgeApp {
                             .strong()
                             .color(TEXT_PRIMARY),
                     );
-                    egui::Frame::none()
-                        .fill(BG_ELEVATED)
-                        .rounding(Rounding::same(6.0))
-                        .inner_margin(egui::Margin::symmetric(7.0, 2.0))
-                        .show(ui, |ui| {
-                            ui.label(
-                                RichText::new(format!("v{VERSION}"))
-                                    .size(10.0)
-                                    .strong()
-                                    .color(TEXT_SECONDARY),
-                            );
-                        });
+                    pill_badge(
+                        ui,
+                        &format!("v{VERSION} \u{00B7} {CODENAME}"),
+                        BG_ELEVATED,
+                        TEXT_SECONDARY,
+                    );
+                    pill_badge(ui, platform_badge_label(), BG_ELEVATED, ACCENT_PRIMARY);
 
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         if styled_button(
@@ -1576,15 +1575,7 @@ impl KeyForgeApp {
                                 .color(BANNER_UPDATE_FG),
                             );
                             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                                if ui
-                                    .add(
-                                        egui::Button::new(
-                                            RichText::new("Dismiss").size(11.0).color(TEXT_SECONDARY),
-                                        )
-                                        .fill(Color32::TRANSPARENT),
-                                    )
-                                    .clicked()
-                                {
+                                if ghost_button(ui, "Dismiss", TEXT_SECONDARY).clicked() {
                                     self.update_banner_dismissed = true;
                                 }
                                 if styled_button(
@@ -1606,6 +1597,52 @@ impl KeyForgeApp {
             }
         }
 
+        if !self.platform_notice_dismissed && !self.platform_caps.notice.trim().is_empty() {
+            let (bg, border, fg) = if self.platform_caps.requires_permission {
+                (BANNER_WARN_BG, BANNER_WARN_BORDER, BANNER_WARN_FG)
+            } else {
+                (BANNER_INFO_BG, BANNER_INFO_BORDER, BANNER_INFO_FG)
+            };
+            let notice = self.platform_caps.notice.clone();
+            let show_wayland_copy =
+                self.platform_caps.platform == "linux" && self.platform_caps.requires_permission;
+            egui::Frame::none()
+                .fill(bg)
+                .stroke(Stroke::new(1.0_f32, border))
+                .rounding(Rounding::same(10.0))
+                .inner_margin(egui::Margin::symmetric(14.0, 6.0))
+                .show(ui, |ui| {
+                    ui.horizontal(|ui| {
+                        ui.add(
+                            egui::Label::new(RichText::new(&notice).size(11.0).color(fg)).wrap(),
+                        );
+                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                            if ghost_button(ui, "\u{2715}", TEXT_SECONDARY).clicked() {
+                                self.platform_notice_dismissed = true;
+                            }
+                            if show_wayland_copy
+                                && styled_button(
+                                    ui,
+                                    "Copy Setup Cmd",
+                                    BTN_NEUTRAL,
+                                    TEXT_PRIMARY,
+                                    BORDER_CONTROL,
+                                )
+                                .clicked()
+                            {
+                                ui.ctx().copy_text(wayland_udev_setup_command().to_string());
+                                self.show_toast(
+                                    "Copied Linux Wayland /dev/uinput setup command to clipboard.",
+                                    ToastLevel::Success,
+                                    5,
+                                );
+                            }
+                        });
+                    });
+                });
+            ui.add_space(6.0);
+        }
+
         if let Some(toast) = self.toast.as_ref().map(|t| (t.message.clone(), t.level)) {
             let (bg, border, fg) = match toast.1 {
                 ToastLevel::Error => (BANNER_ERR_BG, BANNER_ERR_BORDER, BANNER_ERR_FG),
@@ -1622,15 +1659,7 @@ impl KeyForgeApp {
                     ui.horizontal(|ui| {
                         ui.label(RichText::new(toast.0).size(11.5).strong().color(fg));
                         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                            if ui
-                                .add(
-                                    egui::Button::new(
-                                        RichText::new("\u{2715}").size(11.0).color(TEXT_SECONDARY),
-                                    )
-                                    .fill(Color32::TRANSPARENT),
-                                )
-                                .clicked()
-                            {
+                            if ghost_button(ui, "\u{2715}", TEXT_SECONDARY).clicked() {
                                 self.toast = None;
                             }
                         });
@@ -1815,12 +1844,21 @@ impl KeyForgeApp {
                                         RichText::new("Presets:").size(11.0).color(TEXT_MUTED),
                                     );
                                     for ms in [25, 50, 100, 250, 500] {
+                                        let active_ms = self.ss_interval_ms == ms;
                                         if styled_button(
                                             ui,
                                             &format!("{ms}ms"),
-                                            BTN_SUBTLE,
-                                            TEXT_SECONDARY,
-                                            BORDER_SUBTLE,
+                                            if active_ms { SEGMENT_ACTIVE } else { BTN_SUBTLE },
+                                            if active_ms {
+                                                ACCENT_PRIMARY
+                                            } else {
+                                                TEXT_SECONDARY
+                                            },
+                                            if active_ms {
+                                                ACCENT_PRIMARY
+                                            } else {
+                                                BORDER_SUBTLE
+                                            },
                                         )
                                         .clicked()
                                         {
@@ -2306,18 +2344,7 @@ impl KeyForgeApp {
 
                     ui.add_space(4.0);
                     ui.horizontal(|ui| {
-                        if ui
-                            .add(
-                                egui::Button::new(
-                                    RichText::new("+ Save Preset")
-                                        .size(11.0)
-                                        .strong()
-                                        .color(ACCENT_SUCCESS),
-                                )
-                                .fill(Color32::TRANSPARENT),
-                            )
-                            .clicked()
-                        {
+                        if ghost_button(ui, "+ Save Preset", ACCENT_SUCCESS).clicked() {
                             let cur = self.profile.name.trim().to_string();
                             let auto = cur.is_empty()
                                 || self.builtin_names.contains(&cur)
@@ -2332,15 +2359,7 @@ impl KeyForgeApp {
                         }
 
                         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                            if ui
-                                .add(
-                                    egui::Button::new(
-                                        RichText::new("Delete").size(11.0).color(TEXT_MUTED),
-                                    )
-                                    .fill(Color32::TRANSPARENT),
-                                )
-                                .clicked()
-                            {
+                            if ghost_button(ui, "Delete", TEXT_MUTED).clicked() {
                                 let name = self.profile.name.clone();
                                 if self.builtin_names.contains(&name) {
                                     self.show_toast(
@@ -2831,8 +2850,19 @@ impl KeyForgeApp {
                                         let (badge_bg, badge_fg, stripe) =
                                             action_visual_style(act.action_type);
 
-                                        let row_bg = if is_active { BG_CARD_ACTIVE } else { BG_CARD };
-                                        let border = if is_selected {
+                                        let hover_id = ui.make_persistent_id(("step_card_hover", idx));
+                                        let was_hovered =
+                                            ui.ctx().data(|d| d.get_temp::<bool>(hover_id).unwrap_or(false));
+                                        let row_bg = if is_active {
+                                            BG_CARD_ACTIVE
+                                        } else if was_hovered {
+                                            BG_CARD_HOVER
+                                        } else {
+                                            BG_CARD
+                                        };
+                                        let border = if is_active {
+                                            ACCENT_PRIMARY
+                                        } else if is_selected {
                                             BORDER_FOCUS
                                         } else {
                                             BORDER_SUBTLE
@@ -2915,55 +2945,35 @@ impl KeyForgeApp {
                                                             egui::Align::Center,
                                                         ),
                                                         |ui| {
-                                                            if ui
-                                                                .add(
-                                                                    egui::Button::new(
-                                                                        RichText::new("\u{2715}")
-                                                                            .size(11.5)
-                                                                            .color(TEXT_MUTED),
-                                                                    )
-                                                                    .fill(Color32::TRANSPARENT),
-                                                                )
-                                                                .clicked()
+                                                            if ghost_button(
+                                                                ui,
+                                                                "\u{2715}",
+                                                                TEXT_MUTED,
+                                                            )
+                                                            .clicked()
                                                             {
                                                                 pending_del = Some(idx);
                                                             }
-                                                            if ui
-                                                                .add(
-                                                                    egui::Button::new(
-                                                                        RichText::new("Dup")
-                                                                            .size(11.0)
-                                                                            .color(TEXT_MUTED),
-                                                                    )
-                                                                    .fill(Color32::TRANSPARENT),
-                                                                )
+                                                            if ghost_button(ui, "Dup", TEXT_MUTED)
                                                                 .clicked()
                                                             {
                                                                 pending_dup = Some(idx);
                                                             }
-                                                            if ui
-                                                                .add(
-                                                                    egui::Button::new(
-                                                                        RichText::new("\u{25BC}")
-                                                                            .size(11.0)
-                                                                            .color(TEXT_MUTED),
-                                                                    )
-                                                                    .fill(Color32::TRANSPARENT),
-                                                                )
-                                                                .clicked()
+                                                            if ghost_button(
+                                                                ui,
+                                                                "\u{25BC}",
+                                                                TEXT_MUTED,
+                                                            )
+                                                            .clicked()
                                                             {
                                                                 pending_down = Some(idx);
                                                             }
-                                                            if ui
-                                                                .add(
-                                                                    egui::Button::new(
-                                                                        RichText::new("\u{25B2}")
-                                                                            .size(11.0)
-                                                                            .color(TEXT_MUTED),
-                                                                    )
-                                                                    .fill(Color32::TRANSPARENT),
-                                                                )
-                                                                .clicked()
+                                                            if ghost_button(
+                                                                ui,
+                                                                "\u{25B2}",
+                                                                TEXT_MUTED,
+                                                            )
+                                                            .clicked()
                                                             {
                                                                 pending_up = Some(idx);
                                                             }
@@ -3002,6 +3012,10 @@ impl KeyForgeApp {
                                             })
                                             .response;
 
+                                        let hovered_now = resp.hovered()
+                                            || ui.rect_contains_pointer(resp.rect);
+                                        ui.ctx().data_mut(|d| d.insert_temp(hover_id, hovered_now));
+
                                         let interact = ui.interact(
                                             resp.rect,
                                             ui.id().with(("step_row", idx)),
@@ -3012,7 +3026,6 @@ impl KeyForgeApp {
                                         } else if interact.clicked() {
                                             pending_select = Some(idx);
                                         }
-                                        let _ = BG_CARD_HOVER;
                                         ui.add_space(4.0);
                                     }
                                 });
@@ -3609,6 +3622,10 @@ impl eframe::App for KeyForgeApp {
         self.handle_shortcuts(ctx, &visible);
 
         // Mini-HUD viewport if toggled on
+        if self.mini_hud_active && ctx.input(|i| i.viewport().minimized == Some(false) && i.focused)
+        {
+            self.mini_hud_active = false;
+        }
         if self.mini_hud_active {
             let cd_s = self.countdown_deadline.map(|d| {
                 d.saturating_duration_since(Instant::now())
@@ -3753,8 +3770,10 @@ impl eframe::App for KeyForgeApp {
             || self.ss_slider_dirty_at.is_some();
         if high_freq {
             ctx.request_repaint_after(Duration::from_millis(50));
+        } else if self.mini_hud_active {
+            ctx.request_repaint_after(Duration::from_millis(120));
         } else {
-            ctx.request_repaint_after(Duration::from_millis(350));
+            ctx.request_repaint_after(Duration::from_millis(1000));
         }
     }
 

@@ -26,7 +26,7 @@ jobs:
 
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Install Rust Toolchain (stable + rustfmt + clippy)
         uses: dtolnay/rust-toolchain@stable
@@ -34,7 +34,7 @@ jobs:
           components: rustfmt, clippy
 
       - name: Cache Cargo Crates & Build Target
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: |
             ~/.cargo/registry/index
@@ -113,7 +113,7 @@ jobs:
           "$BIN" --expr "Press E -> Wait 50ms -> Click -> Press 1" --repeat 2 --dry-run
 
       - name: Upload Compiled Binary & SHA-256 Checksum Artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: KeyForge-Binaries-${{ matrix.os }}
           path: |
@@ -127,10 +127,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Release Notes
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Download All Compiled Platform Binaries
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           path: release-assets
           merge-multiple: true
@@ -141,10 +141,18 @@ jobs:
           cat *.sha256.txt > SHA256SUMS.txt
           ls -lh
 
+      - name: Resolve Release Codename & Sync Historical Releases
+        id: codename
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          TAG_NAME: ${{ github.ref_name }}
+        run: python3 .github/scripts/sync_release_codenames.py
+
       - name: Create GitHub Release & Attach Binaries
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
-          name: KeyForge ${{ github.ref_name }}
+          name: ${{ steps.codename.outputs.release_title }}
           body_path: RELEASE_NOTES.md
           generate_release_notes: false
           files: |
