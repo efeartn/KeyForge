@@ -5,7 +5,7 @@ use std::sync::{Arc, Condvar, Mutex};
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
-use crate::engine::backend::KEYFORGE_EXTRA_INFO;
+use crate::engine::backend::KTAP_EXTRA_INFO;
 use crate::engine::platform::{
     platform_get_cursor_pos, platform_get_pressed_states, platform_supports_key_polling,
     VK_LBUTTON, VK_MBUTTON, VK_RBUTTON, VK_XBUTTON1, VK_XBUTTON2,
@@ -177,7 +177,7 @@ impl MacroRecorder {
             let cv = Arc::clone(&self.stop_cv);
             let start_ref = self.start_ref;
             if let Ok(handle) = std::thread::Builder::new()
-                .name("KeyForge-Recorder".to_string())
+                .name("kTap-Recorder".to_string())
                 .spawn(move || Self::os_poll_loop(state, cv, start_ref))
             {
                 *guard = Some(handle);
@@ -209,7 +209,7 @@ impl MacroRecorder {
         timestamp_s: Option<f64>,
         extra_info: usize,
     ) {
-        if extra_info == KEYFORGE_EXTRA_INFO {
+        if extra_info == KTAP_EXTRA_INFO {
             return;
         }
         let now = timestamp_s.unwrap_or_else(|| self.start_ref.elapsed().as_secs_f64());
@@ -288,7 +288,7 @@ impl MacroRecorder {
         timestamp_s: Option<f64>,
         extra_info: usize,
     ) {
-        if extra_info == KEYFORGE_EXTRA_INFO {
+        if extra_info == KTAP_EXTRA_INFO {
             return;
         }
         let now = timestamp_s.unwrap_or_else(|| self.start_ref.elapsed().as_secs_f64());
@@ -354,7 +354,7 @@ impl MacroRecorder {
         timestamp_s: Option<f64>,
         extra_info: usize,
     ) {
-        if extra_info == KEYFORGE_EXTRA_INFO || (scroll_dx == 0 && scroll_dy == 0) {
+        if extra_info == KTAP_EXTRA_INFO || (scroll_dx == 0 && scroll_dy == 0) {
             return;
         }
         let now = timestamp_s.unwrap_or_else(|| self.start_ref.elapsed().as_secs_f64());

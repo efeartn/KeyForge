@@ -154,7 +154,7 @@ pub fn new_action_id() -> String {
     hex[..12].to_string()
 }
 
-/// Represents a single step in a KeyForge macro sequence.
+/// Represents a single step in a kTap macro sequence.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MacroAction {
     pub action_type: ActionType,

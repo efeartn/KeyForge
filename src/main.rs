@@ -8,22 +8,22 @@ use std::sync::Arc;
 
 use clap::Parser;
 
-use keyforge::engine::backend::DryRunBackend;
-use keyforge::engine::executor::{ExecutorState, MacroExecutor};
-use keyforge::engine::platform::{create_os_input_backend, wayland_udev_setup_command};
-use keyforge::installer::{install_keyforge, is_running_as_setup_installer, uninstall_keyforge};
-use keyforge::models::dsl::{format_actions_to_dsl, parse_quick_expression};
-use keyforge::models::profile::{create_default_profile, MacroProfile, RepeatMode};
-use keyforge::security::auditor::audit_profile;
-use keyforge::security::integrity::{load_profile_secure, save_profile_secure};
-use keyforge::ui::app::KeyForgeApp;
-use keyforge::ui::installer_window::{InstallerMode, InstallerWindow};
-use keyforge::{CODENAME, VERSION};
+use ktap::engine::backend::DryRunBackend;
+use ktap::engine::executor::{ExecutorState, MacroExecutor};
+use ktap::engine::platform::{create_os_input_backend, wayland_udev_setup_command};
+use ktap::installer::{install_keyforge, is_running_as_setup_installer, uninstall_keyforge};
+use ktap::models::dsl::{format_actions_to_dsl, parse_quick_expression};
+use ktap::models::profile::{create_default_profile, MacroProfile, RepeatMode};
+use ktap::security::auditor::audit_profile;
+use ktap::security::integrity::{load_profile_secure, save_profile_secure};
+use ktap::ui::app::KTapApp;
+use ktap::ui::installer_window::{InstallerMode, InstallerWindow};
+use ktap::{CODENAME, VERSION};
 
 #[derive(Parser, Debug)]
 #[command(
-    name = "keyforge",
-    about = "KeyForge — A modern, secure, FOSS visual keyboard & mouse macro builder and auto-clicker for Windows, macOS, and Linux.",
+    name = "ktap",
+    about = "kTap \u{2014} Minimalist Native Rust Keyboard & Macro Sequence Studio and Live Input Recorder.",
     disable_version_flag = true
 )]
 struct Cli {
@@ -35,7 +35,7 @@ struct Cli {
     #[arg(long)]
     expr: Option<String>,
 
-    /// Path to a .json / .kfmacro profile file to execute or audit.
+    /// Path to a .json / .ktap / .kfmacro profile file to execute or audit.
     #[arg(long)]
     profile: Option<PathBuf>,
 
@@ -55,15 +55,15 @@ struct Cli {
     #[arg(long)]
     export_default: Option<PathBuf>,
 
-    /// Launch the KeyForge Setup Installer GUI.
+    /// Launch the kTap Setup Installer GUI.
     #[arg(long)]
     setup: bool,
 
-    /// Install KeyForge to the local user programs directory (supports --silent).
+    /// Install kTap to the local user programs directory (supports --silent).
     #[arg(long)]
     install: bool,
 
-    /// Uninstall KeyForge (preserves user configs/macros unless --purge-data is passed).
+    /// Uninstall kTap (preserves user configs/macros unless --purge-data is passed).
     #[arg(long)]
     uninstall: bool,
 
@@ -168,7 +168,7 @@ fn run_cli_mode(cli: &Cli) -> i32 {
     }
 
     let backend = if cli.dry_run {
-        Arc::new(DryRunBackend::default()) as Arc<dyn keyforge::engine::backend::InputBackend>
+        Arc::new(DryRunBackend::default()) as Arc<dyn ktap::engine::backend::InputBackend>
     } else {
         create_os_input_backend()
     };
@@ -205,7 +205,7 @@ fn main() {
     let cli = Cli::parse();
 
     if cli.version {
-        println!("KeyForge v{VERSION} \"{CODENAME}\"");
+        println!("kTap v{VERSION} \"{CODENAME}\"");
         std::process::exit(0);
     }
 
@@ -241,7 +241,7 @@ fn main() {
         ) {
             Ok(manifest) => {
                 println!(
-                    "Installed KeyForge v{VERSION} to: {}",
+                    "Installed kTap v{VERSION} to: {}",
                     manifest.installed_exe.display()
                 );
                 std::process::exit(0);
@@ -256,7 +256,7 @@ fn main() {
     if cli.uninstall && cli.silent {
         let res = uninstall_keyforge(cli.install_dir.as_deref(), cli.purge_data, true);
         println!(
-            "Uninstalled KeyForge from: {} (purged_user_data={})",
+            "Uninstalled kTap from: {} (purged_user_data={})",
             res.uninstalled_dir.display(),
             res.purged_user_data
         );
@@ -288,8 +288,8 @@ fn main() {
         std::process::exit(0);
     }
 
-    if let Err(e) = KeyForgeApp::run() {
-        eprintln!("KeyForge GUI Error: {e}");
+    if let Err(e) = KTapApp::run() {
+        eprintln!("kTap GUI Error: {e}");
         std::process::exit(1);
     }
 }

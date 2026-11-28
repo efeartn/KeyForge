@@ -4,7 +4,7 @@ use std::collections::HashSet;
 use std::ffi::c_void;
 use std::sync::Mutex;
 
-use crate::engine::backend::{InputBackend, KEYFORGE_EXTRA_INFO};
+use crate::engine::backend::{InputBackend, KTAP_EXTRA_INFO};
 use crate::engine::platform::{VK_LBUTTON, VK_MBUTTON, VK_RBUTTON, VK_XBUTTON1, VK_XBUTTON2};
 use crate::models::action::MouseButton;
 use crate::models::keymap::KeyInfo;
@@ -236,7 +236,7 @@ impl MacOSInputBackend {
         if evt.is_null() {
             return;
         }
-        CGEventSetIntegerValueField(evt, CG_EVENT_SOURCE_USER_DATA, KEYFORGE_EXTRA_INFO as i64);
+        CGEventSetIntegerValueField(evt, CG_EVENT_SOURCE_USER_DATA, KTAP_EXTRA_INFO as i64);
         CGEventPost(CG_HID_EVENT_TAP, evt);
         CFRelease(evt);
     }

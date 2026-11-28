@@ -183,7 +183,7 @@ pub fn load_brand_texture(ctx: &Context) -> Option<egui::TextureHandle> {
     let rgba = resized.to_rgba8();
     let size = [rgba.width() as usize, rgba.height() as usize];
     let color_image = egui::ColorImage::from_rgba_unmultiplied(size, rgba.as_raw());
-    Some(ctx.load_texture("keyforge_brand", color_image, egui::TextureOptions::LINEAR))
+    Some(ctx.load_texture("ktap_brand", color_image, egui::TextureOptions::LINEAR))
 }
 
 pub fn apply_windows_window_branding() {
@@ -193,7 +193,7 @@ pub fn apply_windows_window_branding() {
         use windows_sys::Win32::UI::Shell::SetCurrentProcessExplicitAppUserModelID;
         use windows_sys::Win32::UI::WindowsAndMessaging::GetForegroundWindow;
 
-        let app_id: Vec<u16> = "KeyForge.Studio.App.1\0".encode_utf16().collect();
+        let app_id: Vec<u16> = "kTap.Studio.App.1\0".encode_utf16().collect();
         let _ = SetCurrentProcessExplicitAppUserModelID(app_id.as_ptr());
 
         let hwnd = GetForegroundWindow();

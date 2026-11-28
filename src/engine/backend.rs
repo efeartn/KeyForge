@@ -6,8 +6,8 @@ use std::sync::Mutex;
 use crate::models::action::MouseButton;
 use crate::models::keymap::KeyInfo;
 
-/// Magic signature stamped into synthetic OS inputs ("KFRG" in ASCII hex).
-pub const KEYFORGE_EXTRA_INFO: usize = 0x4B465247;
+/// Magic signature stamped into synthetic OS inputs ("KTAP" in ASCII hex).
+pub const KTAP_EXTRA_INFO: usize = 0x4B544150;
 
 /// Record of a low-level input operation emitted by an [`InputBackend`].
 #[derive(Debug, Clone, PartialEq, Eq)]

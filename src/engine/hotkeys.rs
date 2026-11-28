@@ -125,7 +125,7 @@ impl GlobalHotkeyManager {
         let state = Arc::clone(&self.state);
         let cv = Arc::clone(&self.stop_cv);
         if let Ok(handle) = std::thread::Builder::new()
-            .name("KeyForge-Hotkeys".to_string())
+            .name("kTap-Hotkeys".to_string())
             .spawn(move || Self::poll_loop(state, cv))
         {
             *guard = Some(handle);

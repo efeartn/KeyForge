@@ -1,4 +1,4 @@
-//! Crash-safe platform configuration persistence and active profile backup for KeyForge.
+//! Crash-safe platform configuration persistence, legacy KeyForge migration, and active profile backup for kTap.
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -15,8 +15,10 @@ use crate::security::validator::{SecurityValidationError, MAX_PROFILE_FILE_BYTES
 
 pub const CONFIG_FILENAME: &str = "config.json";
 pub const CONFIG_BACKUP_FILENAME: &str = "config.json.bak";
-pub const ACTIVE_PROFILE_FILENAME: &str = "active_profile.kfmacro.json";
-pub const ACTIVE_PROFILE_BACKUP_FILENAME: &str = "active_profile.kfmacro.json.bak";
+pub const ACTIVE_PROFILE_FILENAME: &str = "active_profile.ktap.json";
+pub const ACTIVE_PROFILE_BACKUP_FILENAME: &str = "active_profile.ktap.json.bak";
+pub const LEGACY_ACTIVE_PROFILE_FILENAME: &str = "active_profile.kfmacro.json";
+pub const LEGACY_ACTIVE_PROFILE_BACKUP_FILENAME: &str = "active_profile.kfmacro.json.bak";
 pub const PRESETS_DIRNAME: &str = "presets";
 pub const MAX_CONFIG_FILE_BYTES: usize = 1_048_576;
 
@@ -24,11 +26,13 @@ pub fn is_test_binary_env() -> bool {
     if cfg!(test) {
         return true;
     }
-    if std::env::var("KEYFORGE_TEST_ISOLATE")
-        .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
-        .unwrap_or(false)
-    {
-        return true;
+    for env_key in ["KTAP_TEST_ISOLATE", "KEYFORGE_TEST_ISOLATE"] {
+        if std::env::var(env_key)
+            .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
+            .unwrap_or(false)
+        {
+            return true;
+        }
     }
     if let Ok(exe) = std::env::current_exe() {
         let norm = exe.to_string_lossy().replace('\\', "/");
@@ -37,6 +41,7 @@ pub fn is_test_binary_env() -> bool {
             || (norm.contains("/deps/") && norm.contains("/target/"))
             || (norm.contains("/build/")
                 && norm.contains("/out/")
+                && !stem.eq_ignore_ascii_case("ktap")
                 && !stem.eq_ignore_ascii_case("keyforge"))
         {
             return true;
@@ -409,18 +414,7 @@ pub fn home_dir() -> PathBuf {
     }
 }
 
-/// Resolve platform-appropriate KeyForge configuration directory.
-pub fn get_config_dir(custom_dir: Option<&Path>) -> PathBuf {
-    if let Some(dir) = custom_dir {
-        return dir.to_path_buf();
-    }
-    if let Ok(env_dir) = std::env::var("KEYFORGE_CONFIG_DIR") {
-        let trimmed = env_dir.trim();
-        if !trimmed.is_empty() {
-            return PathBuf::from(trimmed);
-        }
-    }
-
+fn default_os_app_dir(app_folder: &str) -> PathBuf {
     if cfg!(target_os = "windows") {
         let base = std::env::var("APPDATA")
             .ok()
@@ -428,14 +422,14 @@ pub fn get_config_dir(custom_dir: Option<&Path>) -> PathBuf {
             .filter(|s| !s.is_empty())
             .map(PathBuf::from)
             .unwrap_or_else(|| home_dir().join("AppData").join("Roaming"));
-        return base.join("KeyForge");
+        return base.join(app_folder);
     }
 
     if cfg!(target_os = "macos") {
         return home_dir()
             .join("Library")
             .join("Application Support")
-            .join("KeyForge");
+            .join(app_folder);
     }
 
     let base = std::env::var("XDG_CONFIG_HOME")
@@ -444,16 +438,99 @@ pub fn get_config_dir(custom_dir: Option<&Path>) -> PathBuf {
         .filter(|s| !s.is_empty())
         .map(PathBuf::from)
         .unwrap_or_else(|| home_dir().join(".config"));
-    base.join("KeyForge")
+    base.join(app_folder)
+}
+
+/// Resolve platform-appropriate kTap configuration directory.
+pub fn get_config_dir(custom_dir: Option<&Path>) -> PathBuf {
+    if let Some(dir) = custom_dir {
+        return dir.to_path_buf();
+    }
+    for env_key in ["KTAP_CONFIG_DIR", "KEYFORGE_CONFIG_DIR"] {
+        if let Ok(env_dir) = std::env::var(env_key) {
+            let trimmed = env_dir.trim();
+            if !trimmed.is_empty() {
+                return PathBuf::from(trimmed);
+            }
+        }
+    }
+    default_os_app_dir("kTap")
+}
+
+/// Copy existing KeyForge configuration, active profile, and presets into a fresh `dst_dir`
+/// without removing the legacy `src_dir`. Returns `true` if migration copied data.
+pub fn migrate_legacy_dir_to(src_dir: &Path, dst_dir: &Path) -> bool {
+    if !src_dir.is_dir() || dst_dir.exists() {
+        return false;
+    }
+    if std::fs::create_dir_all(dst_dir).is_err() {
+        return false;
+    }
+
+    let mut copied_any = false;
+    for (src_name, dst_name) in [
+        (CONFIG_FILENAME, CONFIG_FILENAME),
+        (CONFIG_BACKUP_FILENAME, CONFIG_BACKUP_FILENAME),
+        (LEGACY_ACTIVE_PROFILE_FILENAME, ACTIVE_PROFILE_FILENAME),
+        (
+            LEGACY_ACTIVE_PROFILE_BACKUP_FILENAME,
+            ACTIVE_PROFILE_BACKUP_FILENAME,
+        ),
+        (ACTIVE_PROFILE_FILENAME, ACTIVE_PROFILE_FILENAME),
+        (
+            ACTIVE_PROFILE_BACKUP_FILENAME,
+            ACTIVE_PROFILE_BACKUP_FILENAME,
+        ),
+    ] {
+        let src_file = src_dir.join(src_name);
+        let dst_file = dst_dir.join(dst_name);
+        if src_file.is_file() && !dst_file.exists() && std::fs::copy(&src_file, &dst_file).is_ok() {
+            copied_any = true;
+        }
+    }
+
+    let src_presets = src_dir.join(PRESETS_DIRNAME);
+    if src_presets.is_dir() {
+        let dst_presets = dst_dir.join(PRESETS_DIRNAME);
+        if std::fs::create_dir_all(&dst_presets).is_ok() {
+            if let Ok(entries) = std::fs::read_dir(&src_presets) {
+                for entry in entries.flatten() {
+                    let path = entry.path();
+                    if path.is_file() {
+                        if let Some(name) = path.file_name() {
+                            let dst_preset = dst_presets.join(name);
+                            if !dst_preset.exists() && std::fs::copy(&path, &dst_preset).is_ok() {
+                                copied_any = true;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    copied_any
+}
+
+fn maybe_migrate_legacy_keyforge_config(custom_dir: Option<&Path>) {
+    if custom_dir.is_some() || is_unisolated_test_run(custom_dir) {
+        return;
+    }
+    let has_env_override = ["KTAP_CONFIG_DIR", "KEYFORGE_CONFIG_DIR"]
+        .iter()
+        .any(|k| std::env::var(k).is_ok_and(|s| !s.trim().is_empty()));
+    if has_env_override {
+        return;
+    }
+    let _ = migrate_legacy_dir_to(&default_os_app_dir("KeyForge"), &default_os_app_dir("kTap"));
 }
 
 fn is_unisolated_test_run(custom_dir: Option<&Path>) -> bool {
     if custom_dir.is_some() {
         return false;
     }
-    if std::env::var("KEYFORGE_CONFIG_DIR")
-        .map(|s| !s.trim().is_empty())
-        .unwrap_or(false)
+    if ["KTAP_CONFIG_DIR", "KEYFORGE_CONFIG_DIR"]
+        .iter()
+        .any(|k| std::env::var(k).is_ok_and(|s| !s.trim().is_empty()))
     {
         return false;
     }
@@ -477,6 +554,7 @@ pub fn load_app_config(custom_dir: Option<&Path>) -> AppConfig {
     if is_unisolated_test_run(custom_dir) {
         return AppConfig::default();
     }
+    maybe_migrate_legacy_keyforge_config(custom_dir);
     let config_dir = get_config_dir(custom_dir);
     let candidates = [
         config_dir.join(CONFIG_FILENAME),
@@ -561,15 +639,18 @@ pub fn save_active_profile_backup(
     save_profile_secure(profile, &target)
 }
 
-/// Load the signed active [`MacroProfile`] backup, falling back to `.bak` on corruption.
+/// Load the signed active [`MacroProfile`] backup, falling back to `.bak` and legacy filenames.
 pub fn load_active_profile_backup(custom_dir: Option<&Path>) -> Option<MacroProfile> {
     if is_unisolated_test_run(custom_dir) {
         return None;
     }
+    maybe_migrate_legacy_keyforge_config(custom_dir);
     let config_dir = get_config_dir(custom_dir);
     let candidates = [
         config_dir.join(ACTIVE_PROFILE_FILENAME),
         config_dir.join(ACTIVE_PROFILE_BACKUP_FILENAME),
+        config_dir.join(LEGACY_ACTIVE_PROFILE_FILENAME),
+        config_dir.join(LEGACY_ACTIVE_PROFILE_BACKUP_FILENAME),
     ];
     for candidate in candidates {
         if !candidate.is_file() {
@@ -609,6 +690,10 @@ pub fn get_presets_dir(custom_dir: Option<&Path>) -> PathBuf {
     get_config_dir(custom_dir).join(PRESETS_DIRNAME)
 }
 
+fn is_preset_filename(name: &str) -> bool {
+    name.ends_with(".ktap.json") || name.ends_with(".kfmacro.json")
+}
+
 pub fn save_custom_preset(
     profile: &mut MacroProfile,
     custom_dir: Option<&Path>,
@@ -616,7 +701,7 @@ pub fn save_custom_preset(
     profile.validate().map_err(SecurityValidationError::new)?;
     let presets_dir = get_presets_dir(custom_dir);
     let slug = slugify_preset_name(&profile.name);
-    let target = presets_dir.join(format!("{slug}.kfmacro.json"));
+    let target = presets_dir.join(format!("{slug}.ktap.json"));
     if is_unisolated_test_run(custom_dir) {
         return Ok(target);
     }
@@ -643,7 +728,7 @@ pub fn load_custom_presets(custom_dir: Option<&Path>) -> BTreeMap<String, MacroP
         .filter(|p| {
             p.file_name()
                 .and_then(|s| s.to_str())
-                .is_some_and(|n| n.ends_with(".kfmacro.json"))
+                .is_some_and(is_preset_filename)
         })
         .collect();
     paths.sort();
@@ -672,17 +757,17 @@ pub fn delete_custom_preset(preset_name: &str, custom_dir: Option<&Path>) -> boo
             .filter(|p| {
                 p.file_name()
                     .and_then(|s| s.to_str())
-                    .is_some_and(|n| n.ends_with(".kfmacro.json"))
+                    .is_some_and(is_preset_filename)
             })
             .collect();
         paths.sort();
         for path in paths {
             let matched = match load_profile_secure(&path, false) {
                 Ok((p, _)) => p.name == preset_name,
-                Err(_) => path
-                    .file_name()
-                    .and_then(|s| s.to_str())
-                    .is_some_and(|n| n == format!("{target_slug}.kfmacro.json")),
+                Err(_) => path.file_name().and_then(|s| s.to_str()).is_some_and(|n| {
+                    n == format!("{target_slug}.ktap.json")
+                        || n == format!("{target_slug}.kfmacro.json")
+                }),
             };
             if matched {
                 let _ = std::fs::remove_file(&path);
@@ -690,10 +775,12 @@ pub fn delete_custom_preset(preset_name: &str, custom_dir: Option<&Path>) -> boo
             }
         }
     }
-    let fallback = presets_dir.join(format!("{target_slug}.kfmacro.json"));
-    if fallback.is_file() {
-        let _ = std::fs::remove_file(&fallback);
-        return true;
+    for ext in ["ktap.json", "kfmacro.json"] {
+        let fallback = presets_dir.join(format!("{target_slug}.{ext}"));
+        if fallback.is_file() {
+            let _ = std::fs::remove_file(&fallback);
+            return true;
+        }
     }
     false
 }

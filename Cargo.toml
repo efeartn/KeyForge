@@ -1,21 +1,21 @@
 [package]
-name = "keyforge"
-version = "2.1.0"
+name = "ktap"
+version = "3.0.0"
 edition = "2021"
 license = "GPL-3.0-or-later"
-description = "Native Obsidian & Mint Emerald Keyboard & Macro Sequence Studio and Live Input Recorder"
-repository = "https://github.com/efeartn/KeyForge"
+description = "kTap — Minimalist Native Rust Keyboard & Macro Sequence Studio and Live Input Recorder"
+repository = "https://github.com/efeartn/kTap"
 build = "build.rs"
 
-[package.metadata.keyforge]
-codename = "Waystone"
+[package.metadata.ktap]
+codename = "Pulse"
 
 [lib]
-name = "keyforge"
+name = "ktap"
 path = "src/lib.rs"
 
 [[bin]]
-name = "keyforge"
+name = "ktap"
 path = "src/main.rs"
 
 [dependencies]

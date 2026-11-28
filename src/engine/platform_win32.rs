@@ -12,7 +12,7 @@ use windows_sys::Win32::UI::Input::KeyboardAndMouse::{
 };
 use windows_sys::Win32::UI::WindowsAndMessaging::{GetCursorPos, SetCursorPos};
 
-use crate::engine::backend::{InputBackend, KEYFORGE_EXTRA_INFO};
+use crate::engine::backend::{InputBackend, KTAP_EXTRA_INFO};
 use crate::models::action::MouseButton;
 use crate::models::keymap::KeyInfo;
 
@@ -90,7 +90,7 @@ impl InputBackend for Win32InputBackend {
                     wScan: scan,
                     dwFlags: flags,
                     time: 0,
-                    dwExtraInfo: KEYFORGE_EXTRA_INFO,
+                    dwExtraInfo: KTAP_EXTRA_INFO,
                 },
             },
         };
@@ -111,7 +111,7 @@ impl InputBackend for Win32InputBackend {
                     wScan: scan,
                     dwFlags: flags,
                     time: 0,
-                    dwExtraInfo: KEYFORGE_EXTRA_INFO,
+                    dwExtraInfo: KTAP_EXTRA_INFO,
                 },
             },
         };
@@ -129,7 +129,7 @@ impl InputBackend for Win32InputBackend {
                     mouseData: data,
                     dwFlags: flags,
                     time: 0,
-                    dwExtraInfo: KEYFORGE_EXTRA_INFO,
+                    dwExtraInfo: KTAP_EXTRA_INFO,
                 },
             },
         };
@@ -147,7 +147,7 @@ impl InputBackend for Win32InputBackend {
                     mouseData: data,
                     dwFlags: flags,
                     time: 0,
-                    dwExtraInfo: KEYFORGE_EXTRA_INFO,
+                    dwExtraInfo: KTAP_EXTRA_INFO,
                 },
             },
         };
@@ -165,7 +165,7 @@ impl InputBackend for Win32InputBackend {
                         mouseData: 0,
                         dwFlags: MOUSEEVENTF_MOVE,
                         time: 0,
-                        dwExtraInfo: KEYFORGE_EXTRA_INFO,
+                        dwExtraInfo: KTAP_EXTRA_INFO,
                     },
                 },
             };
@@ -191,7 +191,7 @@ impl InputBackend for Win32InputBackend {
                         mouseData: amount,
                         dwFlags: MOUSEEVENTF_WHEEL,
                         time: 0,
-                        dwExtraInfo: KEYFORGE_EXTRA_INFO,
+                        dwExtraInfo: KTAP_EXTRA_INFO,
                     },
                 },
             };
@@ -208,7 +208,7 @@ impl InputBackend for Win32InputBackend {
                         mouseData: amount,
                         dwFlags: MOUSEEVENTF_HWHEEL,
                         time: 0,
-                        dwExtraInfo: KEYFORGE_EXTRA_INFO,
+                        dwExtraInfo: KTAP_EXTRA_INFO,
                     },
                 },
             };

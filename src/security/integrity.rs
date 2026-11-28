@@ -15,7 +15,8 @@ use crate::security::validator::{
     SecurityValidationError, ALLOWED_ENVELOPE_KEYS, MAX_PROFILE_FILE_BYTES,
 };
 
-pub const ENVELOPE_FORMAT_ID: &str = "kfmacro-v1";
+pub const ENVELOPE_FORMAT_ID: &str = "ktap-v1";
+pub const LEGACY_ENVELOPE_FORMAT_ID: &str = "kfmacro-v1";
 
 /// Serialize a profile payload JSON value into deterministic compact UTF-8 JSON bytes.
 /// Note: `serde_json` uses `BTreeMap` by default (`preserve_order` is disabled), which sorts keys
@@ -42,7 +43,7 @@ pub fn build_signed_envelope(profile: &mut MacroProfile) -> Result<Value, Securi
 
     let mut env = Map::new();
     env.insert(
-        "keyforge_format".to_string(),
+        "ktap_format".to_string(),
         Value::String(ENVELOPE_FORMAT_ID.to_string()),
     );
     env.insert("integrity_sha256".to_string(), Value::String(digest));
@@ -71,8 +72,11 @@ pub fn parse_and_verify_envelope(
         .as_object()
         .ok_or_else(|| SecurityValidationError::new("Top-level JSON value must be an object."))?;
 
-    // Case 1: Signed KeyForge envelope
-    if obj.contains_key("keyforge_format") || obj.contains_key("profile") {
+    // Case 1: Signed kTap envelope or legacy KeyForge kfmacro-v1 envelope
+    if obj.contains_key("ktap_format")
+        || obj.contains_key("keyforge_format")
+        || obj.contains_key("profile")
+    {
         let mut unknown: Vec<&str> = obj
             .keys()
             .map(String::as_str)
@@ -84,12 +88,17 @@ pub fn parse_and_verify_envelope(
                 "Unknown fields in profile envelope: {unknown:?}"
             )));
         }
-        let fmt = obj.get("keyforge_format").and_then(Value::as_str);
-        if fmt != Some(ENVELOPE_FORMAT_ID) {
-            return Err(SecurityValidationError::new(format!(
-                "Unsupported keyforge_format: {:?}",
-                obj.get("keyforge_format")
-            )));
+        let fmt_ok = matches!(
+            (
+                obj.get("ktap_format").and_then(Value::as_str),
+                obj.get("keyforge_format").and_then(Value::as_str),
+            ),
+            (Some(ENVELOPE_FORMAT_ID), None) | (None, Some(LEGACY_ENVELOPE_FORMAT_ID))
+        );
+        if !fmt_ok {
+            return Err(SecurityValidationError::new(
+                "Unsupported or missing envelope format ('ktap_format' / 'keyforge_format').",
+            ));
         }
 
         let payload = obj
@@ -131,7 +140,7 @@ pub fn parse_and_verify_envelope(
     // Case 2: Raw unsigned profile dictionary
     if require_signature {
         return Err(SecurityValidationError::new(
-            "Profile is missing cryptographic SHA-256 envelope ('keyforge_format' / 'integrity_sha256').",
+            "Profile is missing cryptographic SHA-256 envelope ('ktap_format' / 'integrity_sha256').",
         ));
     }
 
@@ -151,7 +160,7 @@ pub fn atomic_write_bytes(target: &Path, payload: &[u8]) -> Result<(), SecurityV
         SecurityValidationError::new(format!("Failed to create parent directory: {e}"))
     })?;
 
-    let tmp_name = format!(".keyforge_{}.tmp", Uuid::new_v4().simple());
+    let tmp_name = format!(".ktap_{}.tmp", Uuid::new_v4().simple());
     let tmp_path = parent.join(tmp_name);
 
     let write_res = (|| -> std::io::Result<()> {

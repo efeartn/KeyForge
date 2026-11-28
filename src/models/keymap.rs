@@ -571,7 +571,7 @@ pub fn list_common_keys() -> Vec<&'static str> {
     result
 }
 
-/// Convert an `egui::Key` into a canonical KeyForge key name.
+/// Convert an `egui::Key` into a canonical kTap key name.
 pub fn egui_key_to_canonical(key: egui::Key) -> Option<&'static str> {
     use egui::Key;
     match key {

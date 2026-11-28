@@ -1,52 +1,52 @@
-# Security Policy & Threat Model — KeyForge
+# Security Policy & Threat Model — kTap
 
-KeyForge is built from the ground up with a **Security-First Architecture** designed by software engineers and cybersecurity analysts. Because input automation software interacts directly with the operating system's low-level input queues (`user32.SendInput` and `SetWindowsHookEx`), macro utilities historically suffer from severe security and reliability vulnerabilities.
+kTap is built from the ground up with a **Security-First Architecture** designed by software engineers and cybersecurity analysts. Because input automation software interacts directly with operating system low-level input queues (`SendInput`, `CGEventPost`, `/dev/uinput`, and `XTest`), macro utilities historically suffer from severe security and reliability vulnerabilities.
 
 ## 1. Threat Model & Mitigations
 
 ### 1.1 Arbitrary Code Execution via Shared Macro Files (RCE Prevention)
 - **Threat**: Many legacy macro tools use scripting engines, `eval()`, `exec()`, `pickle`, or embedded shell commands in saved macro files, turning community-shared macros into malware delivery vectors.
 - **Mitigation**:
-  - KeyForge profiles (`.kfmacro.json`) are **strictly declarative data structures** parsed via `json.loads` with custom depth/size limits.
-  - Zero dynamic code evaluation (`eval`, `exec`, `pickle`, `subprocess`, `os.system`) exists anywhere in the runtime or profile loader.
-  - Every action type, key name, mouse button, coordinate, and timing parameter is validated against a strict allowlist schema (`keyforge.security.validator`).
+  - kTap profiles (`.ktap.json`, plus legacy `.kfmacro.json` compatibility) are **strictly declarative data structures** parsed via `serde_json` with custom depth/size limits.
+  - Zero dynamic code evaluation (`eval`, `exec`, scripting VMs, or arbitrary shell command execution) exists anywhere in the profile loader or macro executor.
+  - Every action type, key name, mouse button, coordinate, and timing parameter is validated against a strict allowlist schema ([`src/security/validator.rs`](src/security/validator.rs)).
 
 ### 1.2 Profile Tampering & Corruption (Cryptographic Integrity)
 - **Threat**: Silent corruption or unauthorized modification of saved macro files causing erratic input behavior.
 - **Mitigation**:
-  - Saved profiles compute and embed a canonical **SHA-256 integrity digest** (`integrity_sha256`) over the normalized macro payload.
-  - When loading a profile, KeyForge verifies the SHA-256 digest before parsing steps into the engine (with explicit user notification if a file was manually edited outside KeyForge).
+  - Saved profiles compute and embed a canonical **SHA-256 integrity digest** (`integrity_sha256`) over the normalized macro payload (`ktap_format: "ktap-v1"`, while continuing to verify legacy `keyforge_format: "kfmacro-v1"` envelopes byte-for-byte).
+  - When loading a profile, kTap verifies the SHA-256 digest with constant-time comparison (`subtle::ConstantTimeEq`) in [`src/security/integrity.rs`](src/security/integrity.rs) before parsing steps into the engine, surfacing an explicit notification if a file was manually modified outside kTap.
 
 ### 1.3 Denial of Service (DoS), Resource Exhaustion & OS Input Starvation
 - **Threat**:
-  1. Malformed "JSON bomb" files (deeply nested Repeat loops or gigabyte files) crashing the application.
-  2. Zero-delay infinite loops (`0ms` wait) flooding the Windows `USER32` input queue and locking the user out of their PC.
+  1. Malformed "JSON bomb" files (deeply nested `Repeat` loops or oversized files) exhausting memory or crashing the application.
+  2. Zero-delay infinite loops (`0ms` wait) flooding OS input queues and locking the user out of their desktop.
   3. Stuck modifier keys (`Shift`, `Ctrl`, `Alt`) or mouse buttons left depressed when a macro is aborted mid-cycle.
 - **Mitigation**:
   - **File Size & Complexity Caps**: Maximum profile file size is capped at `1 MiB`; maximum step count (`5,000`), maximum repeat nesting depth (`5`), and maximum expanded execution operations per cycle (`100,000`) are strictly enforced.
-  - **OS Input Queue Flood Protection**: If a repeating macro loop contains `0ms` total delay across an entire cycle, the execution engine automatically enforces a configurable minimum safety yield (`MIN_SAFE_CYCLE_DELAY_MS = 5ms`) so the Windows kernel and UI thread remain responsive.
-  - **Hardware Panic Kill-Switch**: A dedicated low-level hotkey (`F12` by default) immediately trips an atomic `threading.Event`, waking any active wait timer within `<5ms`.
-  - **Automatic Stuck-Input Sanitizer**: The executor tracks every depressed key (`KEY_DOWN`) and mouse button (`MOUSE_DOWN`) in a thread-safe ledger and unconditionally dispatches matching `KEY_UP` / `MOUSE_UP` events in a `finally:` block upon completion, stop, panic abort, or exception.
+  - **OS Input Queue Flood Protection**: If a repeating macro loop contains `0ms` total delay across an entire cycle, the execution engine automatically enforces a configurable minimum safety yield (`MIN_SAFE_CYCLE_DELAY_MS = 5ms`) so the kernel input stack and UI thread remain responsive.
+  - **Hardware Panic Kill-Switch**: A dedicated global hotkey (`F12` by default) immediately trips an atomic kill-switch (`AtomicBool` / `Arc<Mutex>`), waking any active sleep interval immediately.
+  - **Automatic Stuck-Input Sanitizer**: `EmergencyInputSanitizer` tracks every depressed key (`KeyDown`) and mouse button (`MouseDown`) in a mutex-protected ledger and unconditionally dispatches matching `KeyUp` / `MouseUp` events in reverse order upon completion, stop, or panic abort.
 
 ### 1.4 Self-Triggering / Infinite Feedback Loops
 - **Threat**: A macro sends a keystroke that triggers its own Start hotkey or gets re-recorded by the Live Recorder, causing exponential recursion.
 - **Mitigation**:
-  - Every synthetic Win32 `INPUT` event dispatched by KeyForge is stamped with a magic signature in `dwExtraInfo` (`0x4B465247` / `"KFRG"`).
-  - Both the Live Recorder and Global Hotkey hooks inspect `dwExtraInfo` and ignore synthetic events generated by KeyForge itself.
+  - Every synthetic Win32/macOS event dispatched by kTap is stamped with a magic signature in `dwExtraInfo` / `CGEventSourceUserData` (`0x4B544150` / `"KTAP"`), and Linux Wayland polls physical `evdev` devices while excluding kTap's own `"kTap Virtual ..."` devices.
+  - Both the Live Recorder and Global Hotkey hooks inspect and ignore synthetic events generated by kTap itself.
 
 ### 1.5 Path Traversal & Unsafe File I/O
 - **Threat**: Malicious file paths or symlinks overwriting sensitive system files.
 - **Mitigation**:
-  - Profile paths are canonicalized with `Path.resolve()`, verified against null bytes, restricted to `.json` / `.kfmacro.json` extensions, and written atomically via temporary file swap.
+  - Profile paths are validated against null bytes, NTFS alternate data streams (`:`), reserved Windows device names (`CON`, `NUL`, `COM1`, etc.), restricted to `.json` / `.ktap` / `.kfmacro` extensions, and written atomically via temporary file swap.
 
 ### 1.6 Zero Telemetry, Verified Setup Installer & SHA-256 Auto-Updater
-- KeyForge collects **zero analytics, usage telemetry, advertising SDKs, or third-party tracking**.
-- KeyForge's Windows Setup Installer (`KeyForge-Setup-Windows-x64.exe` / `keyforge.installer`) installs strictly into per-user AppData (`%LOCALAPPDATA%\Programs\KeyForge`) without requiring elevated Administrator privileges, preserves all configs and saved macros across upgrades and default uninstalls, and never fetches unverified binaries from third-party mirrors.
-- To protect against supply-chain tampering, KeyForge's built-in updater (`keyforge.updater`):
-  - Contacts only the official GitHub Releases API over **HTTPS** (`https://api.github.com/repos/efeartn/KeyForge/releases/latest`) and rejects insecure `http://` redirects or unsupported schemes.
-  - Verifies the downloaded executable stream using constant-time **SHA-256 (`hmac.compare_digest`)** against the release `.sha256.txt` digest before allowing replacement.
+- kTap collects **zero analytics, usage telemetry, advertising SDKs, or third-party tracking**.
+- kTap's Setup Installer (`kTap-Setup-Windows-x64.exe` / [`src/installer.rs`](src/installer.rs)) installs strictly into per-user AppData (`%LOCALAPPDATA%\Programs\kTap`) without requiring elevated Administrator privileges, preserves all configs and saved macros across upgrades and default uninstalls (and auto-migrates legacy `KeyForge` configs), and never fetches unverified binaries from third-party mirrors.
+- To protect against supply-chain tampering, kTap's built-in updater ([`src/updater.rs`](src/updater.rs)):
+  - Contacts only the official GitHub Releases API over **HTTPS** (`https://api.github.com/repos/efeartn/kTap/releases/latest`) and rejects insecure `http://` redirects or unsupported schemes.
+  - Verifies the downloaded executable stream using constant-time **SHA-256 (`subtle::ConstantTimeEq`)** against the release `SHA256SUMS.txt` / `.sha256.txt` digest before allowing replacement.
   - Preserves user configuration (`config.json`) and active profile backups in the OS-standard user data directory across upgrades, and supports disabling startup update checks via `"check_updates_on_startup": false` in `config.json` for fully air-gapped environments.
 
 ## 2. Reporting a Vulnerability
 
-If you discover a security issue in KeyForge, please open a GitHub Security Advisory on the repository or contact the maintainer directly before public disclosure.
+If you discover a security issue in kTap, please open a GitHub Security Advisory on the repository or contact the maintainer directly before public disclosure.

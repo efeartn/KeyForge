@@ -57,7 +57,7 @@ fn require_finite_f64(value: &Value, field_name: &str) -> Result<f64, String> {
     Ok(fval)
 }
 
-/// A complete, serializable KeyForge macro profile.
+/// A complete, serializable kTap macro profile.
 #[derive(Debug, Clone, PartialEq)]
 pub struct MacroProfile {
     pub name: String,

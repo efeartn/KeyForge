@@ -1,4 +1,4 @@
-//! Standalone Setup & Uninstall wizard window for KeyForge (`eframe/egui`).
+//! Standalone Setup & Uninstall wizard window for kTap (`eframe/egui`).
 
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
@@ -61,9 +61,9 @@ impl InstallerWindow {
 
     pub fn run(mode: InstallerMode, install_dir: Option<PathBuf>) -> eframe::Result<()> {
         let title = if mode == InstallerMode::Uninstall {
-            format!("Uninstall KeyForge v{VERSION} \"{CODENAME}\"")
+            format!("Uninstall kTap v{VERSION} \"{CODENAME}\"")
         } else {
-            format!("KeyForge v{VERSION} \"{CODENAME}\" Setup")
+            format!("kTap v{VERSION} \"{CODENAME}\" Setup")
         };
         let mut vp = egui::ViewportBuilder::default()
             .with_inner_size([540.0, 440.0])
@@ -101,10 +101,8 @@ impl InstallerWindow {
                 ) {
                     Ok(manifest) => {
                         self.finished = true;
-                        self.status_text = format!(
-                            "Installed KeyForge v{VERSION} to {}",
-                            self.target_dir.display()
-                        );
+                        self.status_text =
+                            format!("Installed kTap v{VERSION} to {}", self.target_dir.display());
                         self.status_color = ACCENT_SUCCESS;
                         if self.launch_after && manifest.installed_exe.is_file() {
                             let _ = Command::new(&manifest.installed_exe)
@@ -125,9 +123,9 @@ impl InstallerWindow {
                 let _res = uninstall_keyforge(Some(&self.target_dir), self.purge_data, true);
                 self.finished = true;
                 self.status_text = if self.purge_data {
-                    "All KeyForge files and user configs removed.".to_string()
+                    "All kTap files and user configs removed.".to_string()
                 } else {
-                    "KeyForge uninstalled. Saved macros and configs were preserved.".to_string()
+                    "kTap uninstalled. Saved macros and configs were preserved.".to_string()
                 };
                 self.status_color = ACCENT_SUCCESS;
             }
@@ -159,14 +157,14 @@ impl eframe::App for InstallerWindow {
                     }
                     ui.vertical(|ui| {
                         let heading = if self.mode == InstallerMode::Setup {
-                            format!("KeyForge v{VERSION} \"{CODENAME}\" Setup")
+                            format!("kTap v{VERSION} \"{CODENAME}\" Setup")
                         } else {
-                            format!("Uninstall KeyForge v{VERSION} \"{CODENAME}\"")
+                            format!("Uninstall kTap v{VERSION} \"{CODENAME}\"")
                         };
                         let subtitle = if self.mode == InstallerMode::Setup {
-                            "Install KeyForge on this computer while preserving existing configs & macros"
+                            "Install kTap on this computer while preserving & auto-migrating existing KeyForge configs"
                         } else {
-                            "Remove KeyForge binaries, shortcuts, and app registration"
+                            "Remove kTap binaries, shortcuts, and app registration"
                         };
                         ui.label(
                             RichText::new(heading)
@@ -256,7 +254,7 @@ impl eframe::App for InstallerWindow {
                         ui.checkbox(&mut self.start_menu_shortcut, menu_lbl);
                         ui.checkbox(
                             &mut self.launch_after,
-                            "Launch KeyForge when setup finishes",
+                            "Launch kTap when setup finishes",
                         );
                         ui.add_space(6.0);
                         ui.add(
@@ -324,13 +322,13 @@ impl eframe::App for InstallerWindow {
                             (lbl.to_string(), ACCENT_PRIMARY, CTA_TEXT)
                         } else if self.mode == InstallerMode::Setup {
                             (
-                                format!("Install KeyForge v{VERSION}"),
+                                format!("Install kTap v{VERSION}"),
                                 CTA_SUCCESS,
                                 CTA_TEXT,
                             )
                         } else {
                             (
-                                "Uninstall KeyForge".to_string(),
+                                "Uninstall kTap".to_string(),
                                 ACCENT_DANGER,
                                 Color32::WHITE,
                             )

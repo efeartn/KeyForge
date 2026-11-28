@@ -20,12 +20,12 @@ use url::Url;
 use crate::installer::resolve_powershell_executable;
 use crate::VERSION;
 
-pub const DEFAULT_REPO: &str = "efeartn/KeyForge";
+pub const DEFAULT_REPO: &str = "efeartn/kTap";
 pub const MAX_API_RESPONSE_BYTES: usize = 2 * 1024 * 1024;
 pub const MAX_CHECKSUM_FILE_BYTES: usize = 1024 * 1024;
 
 pub fn user_agent() -> String {
-    format!("KeyForge/{VERSION}")
+    format!("kTap/{VERSION}")
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -239,28 +239,24 @@ pub fn get_platform_asset_candidates(
 
     if sys_name == "windows" {
         if arch == "arm64" {
-            return vec!["KeyForge-Windows-arm64.exe", "KeyForge-Windows-x64.exe"];
+            return vec!["kTap-Windows-arm64.exe", "kTap-Windows-x64.exe"];
         }
-        return vec!["KeyForge-Windows-x64.exe"];
+        return vec!["kTap-Windows-x64.exe"];
     }
     if sys_name == "macos" || sys_name == "darwin" {
         if arch == "arm64" {
             return vec![
-                "KeyForge-macOS-arm64",
-                "KeyForge-macOS-arm64.zip",
-                "KeyForge-macOS-arm64.dmg",
+                "kTap-macOS-arm64",
+                "kTap-macOS-arm64.zip",
+                "kTap-macOS-arm64.dmg",
             ];
         }
-        return vec![
-            "KeyForge-macOS-x64",
-            "KeyForge-macOS-x64.zip",
-            "KeyForge-macOS-x64.dmg",
-        ];
+        return vec!["kTap-macOS-x64", "kTap-macOS-x64.zip", "kTap-macOS-x64.dmg"];
     }
     if arch == "arm64" {
-        vec!["KeyForge-Linux-arm64"]
+        vec!["kTap-Linux-arm64"]
     } else {
-        vec!["KeyForge-Linux-x64"]
+        vec!["kTap-Linux-x64"]
     }
 }
 
@@ -841,7 +837,7 @@ where
         target_file
             .file_name()
             .and_then(|s| s.to_str())
-            .unwrap_or("KeyForge")
+            .unwrap_or("kTap")
     );
     let temp_file = target_file.with_file_name(temp_name);
     let _ = std::fs::remove_file(&temp_file);
@@ -1094,7 +1090,7 @@ pub fn build_windows_hotswap_command(
     ])
 }
 
-/// Replace the running compiled KeyForge executable with `new_binary` and relaunch cleanly.
+/// Replace the running compiled kTap executable with `new_binary` and relaunch cleanly.
 pub fn apply_update_and_restart(new_binary: &Path, dry_run: bool) -> Result<Vec<String>, String> {
     if !new_binary.is_file() {
         return Err(format!(
@@ -1143,7 +1139,7 @@ pub fn apply_update_and_restart(new_binary: &Path, dry_run: bool) -> Result<Vec<
             target_exe
                 .file_name()
                 .and_then(|s| s.to_str())
-                .unwrap_or("KeyForge")
+                .unwrap_or("kTap")
         ));
     std::fs::copy(new_binary, &stage_path)
         .map_err(|e| format!("Failed to stage POSIX update: {e}"))?;

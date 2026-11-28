@@ -1,4 +1,4 @@
-//! Cross-platform installation, shortcut management, and safe uninstallation for KeyForge.
+//! Cross-platform installation, shortcut management, and safe uninstallation for kTap.
 
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
@@ -12,8 +12,7 @@ use serde_json::json;
 use crate::config::{get_config_dir, home_dir, is_test_binary_env};
 use crate::VERSION;
 
-pub const UNINSTALL_REG_SUBKEY: &str =
-    r"Software\Microsoft\Windows\CurrentVersion\Uninstall\KeyForge";
+pub const UNINSTALL_REG_SUBKEY: &str = r"Software\Microsoft\Windows\CurrentVersion\Uninstall\kTap";
 pub const EMBEDDED_ICON_PNG: &[u8] = include_bytes!("../assets/icon.png");
 
 #[derive(Debug, Clone)]
@@ -32,7 +31,7 @@ pub struct UninstallResult {
 }
 
 struct HostProtectedPaths {
-    install_dir: PathBuf,
+    install_dirs: HashSet<PathBuf>,
     shortcuts: HashSet<PathBuf>,
 }
 
@@ -44,15 +43,14 @@ fn protected_host_paths() -> &'static HostProtectedPaths {
     static PROTECTED: OnceLock<HostProtectedPaths> = OnceLock::new();
     PROTECTED.get_or_init(|| {
         let home = home_dir();
-        let desktop_win = std::env::var("USERPROFILE")
+        let desktop_base = std::env::var("USERPROFILE")
             .ok()
             .filter(|s| !s.trim().is_empty())
             .map(PathBuf::from)
             .unwrap_or_else(|| home.clone())
-            .join("Desktop")
-            .join("KeyForge.lnk");
+            .join("Desktop");
 
-        let start_menu_win = std::env::var("APPDATA")
+        let start_base = std::env::var("APPDATA")
             .ok()
             .filter(|s| !s.trim().is_empty())
             .map(PathBuf::from)
@@ -60,47 +58,51 @@ fn protected_host_paths() -> &'static HostProtectedPaths {
             .join("Microsoft")
             .join("Windows")
             .join("Start Menu")
-            .join("Programs")
-            .join("KeyForge.lnk");
+            .join("Programs");
 
-        let install_win = std::env::var("LOCALAPPDATA")
+        let local_programs = std::env::var("LOCALAPPDATA")
             .ok()
             .filter(|s| !s.trim().is_empty())
             .map(PathBuf::from)
             .unwrap_or_else(|| home.join("AppData").join("Local"))
-            .join("Programs")
-            .join("KeyForge");
+            .join("Programs");
 
-        let mac_desktop = home.join("Desktop").join("KeyForge");
-        let linux_desktop = home.join("Desktop").join("KeyForge.desktop");
-        let linux_app = std::env::var("XDG_DATA_HOME")
+        let xdg_apps = std::env::var("XDG_DATA_HOME")
             .ok()
             .filter(|s| !s.trim().is_empty())
             .map(PathBuf::from)
             .unwrap_or_else(|| home.join(".local").join("share"))
-            .join("applications")
-            .join("keyforge.desktop");
+            .join("applications");
 
-        let install_dir = if cfg!(target_os = "windows") {
-            install_win
-        } else if cfg!(target_os = "macos") {
-            home.join("Applications").join("KeyForge")
-        } else {
-            home.join(".local").join("share").join("KeyForge")
-        };
+        let mut install_dirs = HashSet::new();
+        for brand in ["kTap", "KeyForge"] {
+            let dir = if cfg!(target_os = "windows") {
+                local_programs.join(brand)
+            } else if cfg!(target_os = "macos") {
+                home.join("Applications").join(brand)
+            } else {
+                home.join(".local").join("share").join(brand)
+            };
+            install_dirs.insert(canonical_or_norm(&dir));
+        }
 
         let mut shortcuts = HashSet::new();
         for p in [
-            desktop_win,
-            start_menu_win,
-            mac_desktop,
-            linux_desktop,
-            linux_app,
+            desktop_base.join("kTap.lnk"),
+            desktop_base.join("KeyForge.lnk"),
+            start_base.join("kTap.lnk"),
+            start_base.join("KeyForge.lnk"),
+            home.join("Desktop").join("kTap"),
+            home.join("Desktop").join("KeyForge"),
+            home.join("Desktop").join("kTap.desktop"),
+            home.join("Desktop").join("KeyForge.desktop"),
+            xdg_apps.join("ktap.desktop"),
+            xdg_apps.join("keyforge.desktop"),
         ] {
             shortcuts.insert(canonical_or_norm(&p));
         }
         HostProtectedPaths {
-            install_dir: canonical_or_norm(&install_dir),
+            install_dirs,
             shortcuts,
         }
     })
@@ -123,15 +125,19 @@ pub fn is_protected_host_install_dir(path: &Path) -> bool {
     if !is_test_binary_env() {
         return false;
     }
-    canonical_or_norm(path) == protected_host_paths().install_dir
+    protected_host_paths()
+        .install_dirs
+        .contains(&canonical_or_norm(path))
 }
 
-/// Return the default per-user installation directory for KeyForge.
+/// Return the default per-user installation directory for kTap.
 pub fn get_default_install_dir() -> PathBuf {
-    if let Ok(env_dir) = std::env::var("KEYFORGE_INSTALL_DIR") {
-        let trimmed = env_dir.trim();
-        if !trimmed.is_empty() {
-            return PathBuf::from(trimmed);
+    for env_key in ["KTAP_INSTALL_DIR", "KEYFORGE_INSTALL_DIR"] {
+        if let Ok(env_dir) = std::env::var(env_key) {
+            let trimmed = env_dir.trim();
+            if !trimmed.is_empty() {
+                return PathBuf::from(trimmed);
+            }
         }
     }
 
@@ -142,14 +148,14 @@ pub fn get_default_install_dir() -> PathBuf {
             .filter(|s| !s.is_empty())
             .map(PathBuf::from)
             .unwrap_or_else(|| home_dir().join("AppData").join("Local"));
-        return base.join("Programs").join("KeyForge");
+        return base.join("Programs").join("kTap");
     }
 
     if cfg!(target_os = "macos") {
-        return home_dir().join("Applications").join("KeyForge");
+        return home_dir().join("Applications").join("kTap");
     }
 
-    home_dir().join(".local").join("share").join("KeyForge")
+    home_dir().join(".local").join("share").join("kTap")
 }
 
 /// Return `true` if launched from a standalone `*Setup*` installer executable.
@@ -201,7 +207,7 @@ pub fn get_windows_shortcut_paths() -> (PathBuf, PathBuf) {
         .map(PathBuf::from)
         .unwrap_or_else(home_dir)
         .join("Desktop")
-        .join("KeyForge.lnk");
+        .join("kTap.lnk");
 
     let roaming = std::env::var("APPDATA")
         .ok()
@@ -213,23 +219,23 @@ pub fn get_windows_shortcut_paths() -> (PathBuf, PathBuf) {
         .join("Windows")
         .join("Start Menu")
         .join("Programs")
-        .join("KeyForge.lnk");
+        .join("kTap.lnk");
     (desktop, start_menu)
 }
 
 fn get_linux_shortcut_paths() -> (PathBuf, PathBuf) {
-    let desktop = home_dir().join("Desktop").join("KeyForge.desktop");
+    let desktop = home_dir().join("Desktop").join("kTap.desktop");
     let data_base = std::env::var("XDG_DATA_HOME")
         .ok()
         .filter(|s| !s.trim().is_empty())
         .map(PathBuf::from)
         .unwrap_or_else(|| home_dir().join(".local").join("share"));
-    let app_menu = data_base.join("applications").join("keyforge.desktop");
+    let app_menu = data_base.join("applications").join("ktap.desktop");
     (desktop, app_menu)
 }
 
 fn get_macos_shortcut_path() -> PathBuf {
-    home_dir().join("Desktop").join("KeyForge")
+    home_dir().join("Desktop").join("kTap")
 }
 
 fn create_windows_shortcut(shortcut_path: &Path, target_exe: &Path, description: &str) -> bool {
@@ -348,9 +354,9 @@ fn register_windows_uninstaller(target_dir: &Path, installed_exe: &Path) -> bool
 
         let exe_s = installed_exe.to_string_lossy();
         let dir_s = target_dir.to_string_lossy();
-        set_sz("DisplayName", "KeyForge");
+        set_sz("DisplayName", "kTap");
         set_sz("DisplayVersion", VERSION);
-        set_sz("Publisher", "KeyForge Open Source");
+        set_sz("Publisher", "kTap Open Source");
         set_sz("DisplayIcon", &exe_s);
         set_sz("InstallLocation", &dir_s);
         set_sz("UninstallString", &format!("\"{exe_s}\" --uninstall"));
@@ -425,7 +431,7 @@ fn create_linux_desktop_entry(
         _ => String::new(),
     };
     let content = format!(
-        "[Desktop Entry]\nVersion=1.0\nType=Application\nName=KeyForge\nComment={description}\nExec=\"{}\"\n{icon_line}Terminal=false\nCategories=Utility;\n",
+        "[Desktop Entry]\nVersion=1.0\nType=Application\nName=kTap\nComment={description}\nExec=\"{}\"\n{icon_line}Terminal=false\nCategories=Utility;\n",
         target_exe.display()
     );
     if std::fs::write(entry_path, content).is_err() {
@@ -495,9 +501,9 @@ pub fn install_keyforge(
         .map(PathBuf::from)
         .unwrap_or_else(get_default_install_dir);
     let exe_name = if cfg!(target_os = "windows") {
-        "KeyForge.exe"
+        "kTap.exe"
     } else {
-        "KeyForge"
+        "kTap"
     };
     let installed_exe = target_dir.join(exe_name);
 
@@ -545,7 +551,7 @@ pub fn install_keyforge(
 
     let mut desktop_created: Option<PathBuf> = None;
     let mut start_menu_created: Option<PathBuf> = None;
-    let desc = format!("KeyForge v{VERSION} Macro Studio");
+    let desc = format!("kTap v{VERSION} Macro Studio");
 
     if cfg!(target_os = "windows") {
         let (desktop_lnk, start_menu_lnk) = get_windows_shortcut_paths();
@@ -569,7 +575,7 @@ pub fn install_keyforge(
             desktop_created = Some(mac_sc);
         }
     } else {
-        let dst_icon = target_dir.join("keyforge.png");
+        let dst_icon = target_dir.join("ktap.png");
         let copied_icon = if std::fs::write(&dst_icon, EMBEDDED_ICON_PNG).is_ok() {
             Some(dst_icon)
         } else {

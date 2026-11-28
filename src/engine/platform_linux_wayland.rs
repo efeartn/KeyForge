@@ -8,6 +8,7 @@ use std::os::unix::ffi::OsStrExt;
 use std::os::unix::io::AsRawFd;
 use std::path::PathBuf;
 use std::sync::Mutex;
+use std::time::{Duration, Instant};
 
 use crate::engine::backend::InputBackend;
 use crate::engine::platform::{
@@ -243,7 +244,7 @@ fn open_uinput_file() -> Result<File, String> {
         .open(path)
         .map_err(|e| match e.kind() {
             io::ErrorKind::PermissionDenied => {
-                format!("Permission denied opening {path}. Run `keyforge --wayland-setup` to enable native Wayland input.")
+                format!("Permission denied opening {path}. Run `ktap --wayland-setup` to enable native Wayland input.")
             }
             _ => format!("Failed to open {path}: {e}"),
         })
@@ -295,7 +296,7 @@ impl UinputDevice {
             for rel in [REL_X, REL_Y, REL_WHEEL, REL_HWHEEL] {
                 let _ = libc::ioctl(fd, UI_SET_RELBIT, i32::from(rel));
             }
-            let setup = make_setup("KeyForge Virtual Input", 0x0001);
+            let setup = make_setup("kTap Virtual Input", 0x0001);
             if libc::ioctl(fd, UI_DEV_SETUP, &setup) < 0 {
                 return Err("uinput UI_DEV_SETUP failed.".to_string());
             }
@@ -337,7 +338,7 @@ impl UinputDevice {
                     return Err("uinput UI_ABS_SETUP failed.".to_string());
                 }
             }
-            let setup = make_setup("KeyForge Virtual Pointer", 0x0002);
+            let setup = make_setup("kTap Virtual Pointer", 0x0002);
             if libc::ioctl(fd, UI_DEV_SETUP, &setup) < 0 {
                 return Err("uinput pointer UI_DEV_SETUP failed.".to_string());
             }
@@ -377,17 +378,17 @@ fn discover_evdev_devices() -> Vec<PathBuf> {
                 }
                 let mut dev_name = [0u8; 256];
                 let nlen = libc::ioctl(fd, EVIOCGNAME_256, dev_name.as_mut_ptr());
-                let is_keyforge_virtual = if nlen > 0 {
+                let is_ktap_virtual = if nlen > 0 {
                     let s = String::from_utf8_lossy(
                         &dev_name[..dev_name.iter().position(|&b| b == 0).unwrap_or(255)],
                     );
-                    s.starts_with("KeyForge Virtual")
+                    s.starts_with("kTap Virtual") || s.starts_with("KeyForge Virtual")
                 } else {
                     false
                 };
 
                 let mut ev_bits = [0u8; 32];
-                let has_keys = !is_keyforge_virtual
+                let has_keys = !is_ktap_virtual
                     && libc::ioctl(fd, EVIOCGBIT_0_32, ev_bits.as_mut_ptr()) >= 0
                     && (ev_bits[0] & (1 << EV_KEY)) != 0;
                 libc::close(fd);
@@ -400,6 +401,8 @@ fn discover_evdev_devices() -> Vec<PathBuf> {
     paths
 }
 
+const EVDEV_SCAN_TTL: Duration = Duration::from_secs(5);
+
 struct WaylandState {
     dev: Option<UinputDevice>,
     abs_dev: Option<UinputDevice>,
@@ -408,6 +411,8 @@ struct WaylandState {
     screen_h: i64,
     cursor_x: i64,
     cursor_y: i64,
+    cached_evdev: Vec<PathBuf>,
+    last_evdev_scan: Option<Instant>,
 }
 
 /// Native Linux Wayland backend using kernel `/dev/uinput` and `evdev`.
@@ -433,6 +438,8 @@ impl LinuxWaylandUinputBackend {
                     screen_h: 1080,
                     cursor_x: 960,
                     cursor_y: 540,
+                    cached_evdev: Vec::new(),
+                    last_evdev_scan: None,
                 }),
             },
             Err(reason) => Self {
@@ -444,6 +451,8 @@ impl LinuxWaylandUinputBackend {
                     screen_h: 1080,
                     cursor_x: 960,
                     cursor_y: 540,
+                    cached_evdev: Vec::new(),
+                    last_evdev_scan: None,
                 }),
             },
         }
@@ -453,8 +462,20 @@ impl LinuxWaylandUinputBackend {
         self.state.lock().expect("wayland lock").dev.is_some()
     }
 
+    fn evdev_devices_cached(&self) -> Vec<PathBuf> {
+        let mut st = self.state.lock().expect("wayland lock");
+        let stale = st
+            .last_evdev_scan
+            .is_none_or(|t| t.elapsed() >= EVDEV_SCAN_TTL);
+        if stale {
+            st.cached_evdev = discover_evdev_devices();
+            st.last_evdev_scan = Some(Instant::now());
+        }
+        st.cached_evdev.clone()
+    }
+
     pub fn can_poll_evdev(&self) -> bool {
-        !discover_evdev_devices().is_empty()
+        !self.evdev_devices_cached().is_empty()
     }
 
     pub fn unavailable_reason(&self) -> String {
@@ -474,7 +495,7 @@ impl LinuxWaylandUinputBackend {
         let mut mouse_states: HashMap<u16, bool> =
             mouse_vks.iter().map(|&vk| (vk, false)).collect();
 
-        let devices = discover_evdev_devices();
+        let devices = self.evdev_devices_cached();
         if devices.is_empty() {
             return (key_states, mouse_states);
         }

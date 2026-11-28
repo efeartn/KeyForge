@@ -1,4 +1,4 @@
-//! Modal Software Update dialog for KeyForge.
+//! Modal Software Update dialog for kTap.
 
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -58,7 +58,7 @@ impl UpdateDialogState {
             is_downloading: false,
             cancel_flag: Arc::new(AtomicBool::new(false)),
             progress_frac: 0.0,
-            status_title: format!("KeyForge v{VERSION} \"{CODENAME}\""),
+            status_title: format!("kTap v{VERSION} \"{CODENAME}\""),
             meta_text: "Checking GitHub Releases...".to_string(),
             progress_text: String::new(),
             notes_text: String::new(),
@@ -118,7 +118,7 @@ impl UpdateDialogState {
                 "Latest release on GitHub: v{}{}",
                 rel.version, rel_codename_suffix
             );
-            self.progress_text = "KeyForge is running the latest version.".to_string();
+            self.progress_text = "kTap is running the latest version.".to_string();
         }
     }
 
@@ -132,7 +132,7 @@ impl UpdateDialogState {
         self.progress_text = format!("Querying GitHub Releases ({DEFAULT_REPO})...");
         let tx = self.tx.clone();
         std::thread::Builder::new()
-            .name("KeyForge-UpdateCheck".to_string())
+            .name("kTap-UpdateCheck".to_string())
             .spawn(
                 move || match fetch_latest_release(Some(VERSION), Some(DEFAULT_REPO), 8.0) {
                     Ok(rel) => {
@@ -163,7 +163,7 @@ impl UpdateDialogState {
         let filename = rel
             .asset_name
             .clone()
-            .unwrap_or_else(|| format!("KeyForge-v{}.bin", rel.version));
+            .unwrap_or_else(|| format!("kTap-v{}.bin", rel.version));
         let mut target_path = updates_dir.join(filename);
         if let Ok(cur_exe) = std::env::current_exe() {
             let same =
@@ -174,14 +174,14 @@ impl UpdateDialogState {
                     .and_then(|s| s.to_str())
                     .map(|s| format!(".{s}"))
                     .unwrap_or_else(|| ".bin".to_string());
-                target_path = updates_dir.join(format!("KeyForge-update-v{}{ext}", rel.version));
+                target_path = updates_dir.join(format!("kTap-update-v{}{ext}", rel.version));
             }
         }
 
         let tx = self.tx.clone();
         let cancel_flag = Arc::clone(&self.cancel_flag);
         std::thread::Builder::new()
-            .name("KeyForge-UpdateDownload".to_string())
+            .name("kTap-UpdateDownload".to_string())
             .spawn(move || {
                 let require_sha = rel.sha256.is_some();
                 let res = download_update_asset(

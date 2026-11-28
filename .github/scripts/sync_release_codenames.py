@@ -1,4 +1,4 @@
-"""Resolve KeyForge release codename and synchronize historical GitHub Release titles."""
+"""Resolve kTap release codename and synchronize historical GitHub Release titles."""
 
 from __future__ import annotations
 
@@ -7,6 +7,15 @@ import os
 import re
 import urllib.error
 import urllib.request
+
+
+def brand_for_version(version_str: str) -> str:
+    clean = version_str.lstrip("vV").split("-", 1)[0].split("+", 1)[0]
+    try:
+        major = int(clean.split(".", 1)[0])
+    except ValueError:
+        major = 3
+    return "kTap" if major >= 3 else "KeyForge"
 
 
 def main() -> int:
@@ -22,7 +31,8 @@ def main() -> int:
     tag = os.environ["TAG_NAME"]
     ver = tag.lstrip("vV").split("-", 1)[0]
     codename = pairs.get(ver, current_codename)
-    title = f'KeyForge {tag} "{codename}"' if codename else f"KeyForge {tag}"
+    brand = brand_for_version(tag)
+    title = f'{brand} {tag} "{codename}"' if codename else f"{brand} {tag}"
 
     github_output = os.environ.get("GITHUB_OUTPUT")
     if github_output:
@@ -35,7 +45,7 @@ def main() -> int:
     headers = {
         "Accept": "application/vnd.github+json",
         "Authorization": f"Bearer {token}",
-        "User-Agent": "KeyForge-Release-Sync",
+        "User-Agent": "kTap-Release-Sync",
         "X-GitHub-Api-Version": "2022-11-28",
     }
 
@@ -52,7 +62,8 @@ def main() -> int:
         rcodename = pairs.get(rver)
         if not rcodename:
             continue
-        want_name = f'KeyForge {rtag} "{rcodename}"'
+        rbrand = brand_for_version(rtag)
+        want_name = f'{rbrand} {rtag} "{rcodename}"'
         if rel.get("name") == want_name:
             continue
         patch_req = urllib.request.Request(

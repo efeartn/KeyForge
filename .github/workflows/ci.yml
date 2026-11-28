@@ -1,4 +1,4 @@
-name: KeyForge Cross-Platform CI, Security & Release Compiler
+name: kTap Cross-Platform CI, Security & Release Compiler
 
 on:
   push:
@@ -75,19 +75,19 @@ jobs:
           OS="${{ runner.os }}"
           ARCH=$(uname -m)
           if [ "$OS" = "Windows" ]; then
-            cp target/release/keyforge.exe dist/KeyForge-Windows-x64.exe
-            cp target/release/keyforge.exe dist/KeyForge-Setup-Windows-x64.exe
+            cp target/release/ktap.exe dist/kTap-Windows-x64.exe
+            cp target/release/ktap.exe dist/kTap-Setup-Windows-x64.exe
           elif [ "$OS" = "macOS" ]; then
             if [ "$ARCH" = "arm64" ]; then
-              cp target/release/keyforge dist/KeyForge-macOS-arm64
+              cp target/release/ktap dist/kTap-macOS-arm64
             else
-              cp target/release/keyforge dist/KeyForge-macOS-x64
+              cp target/release/ktap dist/kTap-macOS-x64
             fi
           else
             if [ "$ARCH" = "aarch64" ] || [ "$ARCH" = "arm64" ]; then
-              cp target/release/keyforge dist/KeyForge-Linux-arm64
+              cp target/release/ktap dist/kTap-Linux-arm64
             else
-              cp target/release/keyforge dist/KeyForge-Linux-x64
+              cp target/release/ktap dist/kTap-Linux-x64
             fi
           fi
 
@@ -115,7 +115,7 @@ jobs:
       - name: Upload Compiled Binary & SHA-256 Checksum Artifact
         uses: actions/upload-artifact@v6
         with:
-          name: KeyForge-Binaries-${{ matrix.os }}
+          name: kTap-Binaries-${{ matrix.os }}
           path: |
             dist/*
           if-no-files-found: error

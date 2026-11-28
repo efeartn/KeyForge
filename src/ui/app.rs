@@ -1,4 +1,4 @@
-//! Pure Rust `eframe/egui` Craft Obsidian & Mint Emerald Desktop GUI for KeyForge.
+//! Pure Rust `eframe/egui` Craft Obsidian & Mint Emerald Desktop GUI for kTap.
 
 use std::collections::BTreeMap;
 use std::sync::mpsc;
@@ -106,7 +106,7 @@ struct ToastState {
     expires_at: Instant,
 }
 
-pub struct KeyForgeApp {
+pub struct KTapApp {
     app_config: AppConfig,
     profile: MacroProfile,
     presets: Vec<MacroProfile>,
@@ -158,7 +158,9 @@ pub struct KeyForgeApp {
     undo_stack: Vec<Vec<MacroAction>>,
     redo_stack: Vec<Vec<MacroAction>>,
 
-    // Cached Audit & Security display
+    // Cached cycle & audit metrics
+    cached_enabled_count: usize,
+    cached_cycle_wait_ms: i64,
     last_audit: AuditReport,
     cached_sha256: String,
     cached_nodes: usize,
@@ -190,7 +192,7 @@ pub struct KeyForgeApp {
     last_cursor_poll: Instant,
 }
 
-impl KeyForgeApp {
+impl KTapApp {
     pub fn run() -> eframe::Result<()> {
         let mut vp = egui::ViewportBuilder::default()
             .with_inner_size([1140.0, 720.0])
@@ -202,7 +204,7 @@ impl KeyForgeApp {
             viewport: vp,
             ..Default::default()
         };
-        let title = format!("KeyForge v{VERSION} \"{CODENAME}\"");
+        let title = format!("kTap v{VERSION} \"{CODENAME}\"");
         eframe::run_native(
             &title,
             options,
@@ -265,6 +267,8 @@ impl KeyForgeApp {
 
         let mut app = Self {
             ss_key: app_config.simple_spammer.key.clone(),
+            cached_enabled_count: profile.actions.iter().filter(|a| a.enabled).count(),
+            cached_cycle_wait_ms: profile.total_cycle_wait_ms(),
             ss_interval_ms: app_config.simple_spammer.interval_ms.clamp(25, 2000),
             ss_jitter_enabled: app_config.simple_spammer.jitter_enabled,
             ss_slider_dirty_at: None,
@@ -313,7 +317,7 @@ impl KeyForgeApp {
             last_telem_error: None,
             cursor_xy: (0, 0),
             console_lines: Vec::new(),
-            footer_status: format!("\u{25CF} Ready \u{2014} KeyForge v{VERSION} \"{CODENAME}\""),
+            footer_status: format!("\u{25CF} Ready \u{2014} kTap v{VERSION} \"{CODENAME}\""),
             toast: None,
             key_capture_target: None,
             step_dialog: None,
@@ -335,7 +339,7 @@ impl KeyForgeApp {
         app.sync_profile_to_simple_spammer_fields();
         app.run_security_audit();
         app.log_event(&format!(
-            "KeyForge v{VERSION} \"{CODENAME}\" ({} \u{00B7} {}) ready. Panic Stop armed on [{}].",
+            "kTap v{VERSION} \"{CODENAME}\" ({} \u{00B7} {}) ready. Panic Stop armed on [{}].",
             platform_badge_label(),
             app.platform_caps.backend_name,
             app.profile.panic_hotkey
@@ -348,7 +352,7 @@ impl KeyForgeApp {
 
         if start_update_check {
             std::thread::Builder::new()
-                .name("KeyForge-StartupUpdate".to_string())
+                .name("kTap-StartupUpdate".to_string())
                 .spawn(move || {
                     let found = fetch_latest_release(Some(VERSION), Some(DEFAULT_REPO), 8.0)
                         .ok()
@@ -585,9 +589,15 @@ impl KeyForgeApp {
         self.cycle_delay_str = "0".to_string();
         self.profile.actions = vec![act1, act2];
         let _ = self.profile.validate();
+        self.refresh_cached_metrics();
         self.dsl_input = format_actions_to_dsl(&self.profile.actions);
         self.run_security_audit();
         true
+    }
+
+    fn refresh_cached_metrics(&mut self) {
+        self.cached_enabled_count = self.profile.actions.iter().filter(|a| a.enabled).count();
+        self.cached_cycle_wait_ms = self.profile.total_cycle_wait_ms();
     }
 
     fn record_undo(&mut self) {
@@ -599,6 +609,7 @@ impl KeyForgeApp {
     }
 
     fn on_sequence_mutated(&mut self, sync_simple: bool) {
+        self.refresh_cached_metrics();
         self.dsl_input = format_actions_to_dsl(&self.profile.actions);
         self.run_security_audit();
         if sync_simple {
@@ -875,8 +886,8 @@ impl KeyForgeApp {
 
     fn open_profile_dialog(&mut self) {
         if let Some(path) = rfd::FileDialog::new()
-            .set_title("Open KeyForge Macro Profile")
-            .add_filter("KeyForge Macro", &["json", "kfmacro"])
+            .set_title("Open kTap Macro Profile")
+            .add_filter("kTap / KeyForge Macro", &["json", "ktap", "kfmacro"])
             .pick_file()
         {
             if self.executor.is_running() {
@@ -914,9 +925,9 @@ impl KeyForgeApp {
 
     fn save_profile_dialog(&mut self) {
         if let Some(path) = rfd::FileDialog::new()
-            .set_title("Save KeyForge Macro Profile")
-            .set_file_name("my_macro.kfmacro.json")
-            .add_filter("KeyForge Macro JSON", &["json"])
+            .set_title("Save kTap Macro Profile")
+            .set_file_name("my_macro.ktap.json")
+            .add_filter("kTap Macro JSON", &["json"])
             .save_file()
         {
             self.sync_ui_settings_to_profile();
@@ -948,7 +959,7 @@ impl KeyForgeApp {
         self.record_undo();
         self.profile = MacroProfile {
             name: "Custom Macro Profile".to_string(),
-            description: "Created in KeyForge".to_string(),
+            description: "Created in kTap".to_string(),
             repeat_mode: RepeatMode::Count,
             repeat_count: 5,
             inter_cycle_delay_ms: 100,
@@ -962,7 +973,12 @@ impl KeyForgeApp {
     }
 
     fn visible_step_indices(&self) -> Vec<usize> {
-        let q = self.filter_query.trim().to_ascii_lowercase();
+        let trimmed = self.filter_query.trim();
+        let q = if trimmed.is_empty() {
+            String::new()
+        } else {
+            trimmed.to_ascii_lowercase()
+        };
         self.profile
             .actions
             .iter()
@@ -988,9 +1004,9 @@ impl KeyForgeApp {
                 if q.is_empty() {
                     return true;
                 }
-                let hay = format!("{} {} {}", act.badge_text(), act.describe(), act.label)
-                    .to_ascii_lowercase();
-                hay.contains(&q)
+                act.badge_text().to_ascii_lowercase().contains(&q)
+                    || act.label.to_ascii_lowercase().contains(&q)
+                    || act.describe().to_ascii_lowercase().contains(&q)
             })
             .map(|(i, _)| i)
             .collect()
@@ -1152,7 +1168,7 @@ impl KeyForgeApp {
             if let Some(rel) = maybe_rel {
                 if rel.is_update_available {
                     self.log_event(&format!(
-                        "Update available: KeyForge v{} ({}).",
+                        "Update available: kTap v{} ({}).",
                         rel.version, rel.tag_name
                     ));
                     self.latest_release = Some(rel);
@@ -1388,7 +1404,7 @@ impl KeyForgeApp {
                         ui.image((tex.id(), egui::vec2(26.0, 26.0)));
                     }
                     ui.label(
-                        RichText::new("KeyForge")
+                        RichText::new("kTap")
                             .size(16.0)
                             .strong()
                             .color(TEXT_PRIMARY),
@@ -1409,12 +1425,16 @@ impl KeyForgeApp {
                             BTN_DANGER_SUBTLE_TEXT,
                             BTN_DANGER_BORDER,
                         )
+                        .on_hover_text(
+                            "Immediately abort execution and release all held keys/buttons",
+                        )
                         .clicked()
                         {
                             self.trigger_panic_stop();
                         }
 
                         if styled_button(ui, "Mini HUD", BTN_NEUTRAL, TEXT_PRIMARY, BORDER_CONTROL)
+                            .on_hover_text("Minimize window and show floating compact control pill")
                             .clicked()
                         {
                             self.mini_hud_active = !self.mini_hud_active;
@@ -1567,7 +1587,7 @@ impl KeyForgeApp {
                         ui.horizontal(|ui| {
                             ui.label(
                                 RichText::new(format!(
-                                    "\u{2728} KeyForge v{} is available \u{2014} Update cleanly while keeping all your configs & macros",
+                                    "\u{2728} kTap v{} is available \u{2014} Update cleanly while keeping all your configs & macros",
                                     rel.version
                                 ))
                                 .size(11.5)
@@ -1881,14 +1901,13 @@ impl KeyForgeApp {
                         } else {
                             card_frame().show(ui, |ui| {
                                 micro_heading(ui, "ACTIVE MACRO SEQUENCE");
-                                let enabled_cnt =
-                                    self.profile.actions.iter().filter(|a| a.enabled).count();
                                 ui.label(
                                     RichText::new(format!(
-                                        "{}\n{enabled_cnt}/{} active steps \u{2022} {}ms per cycle",
+                                        "{}\n{}/{} active steps \u{2022} {}ms per cycle",
                                         self.profile.name,
+                                        self.cached_enabled_count,
                                         self.profile.actions.len(),
-                                        self.profile.total_cycle_wait_ms()
+                                        self.cached_cycle_wait_ms
                                     ))
                                     .size(11.5)
                                     .color(TEXT_SECONDARY),
@@ -2050,10 +2069,15 @@ impl KeyForgeApp {
                                                         RichText::new(lbl)
                                                             .size(11.5)
                                                             .strong()
-                                                            .color(TEXT_PRIMARY),
+                                                            .color(if active {
+                                                                TEXT_PRIMARY
+                                                            } else {
+                                                                TEXT_SECONDARY
+                                                            }),
                                                     )
                                                     .fill(fill)
-                                                    .stroke(Stroke::NONE),
+                                                    .stroke(Stroke::NONE)
+                                                    .rounding(Rounding::same(6.0)),
                                                 )
                                                 .clicked()
                                                 && self.profile.repeat_mode != m
@@ -2061,6 +2085,7 @@ impl KeyForgeApp {
                                                 self.profile.repeat_mode = m;
                                                 self.sync_profile_settings_to_ui();
                                                 self.sync_ui_settings_to_profile();
+                                                self.save_persistent_state();
                                             }
                                         }
                                     });
@@ -2166,7 +2191,7 @@ impl KeyForgeApp {
                             )
                         } else {
                             (
-                                format!("\u{2713} KeyForge v{VERSION} \u{2022} Check Updates"),
+                                format!("\u{2713} kTap v{VERSION} \u{2022} Check Updates"),
                                 TEXT_SECONDARY,
                             )
                         };
@@ -2426,8 +2451,7 @@ impl KeyForgeApp {
                     ui.label(
                         RichText::new(format!(
                             "Cycle: {}ms \u{2022} {:.1}s",
-                            self.profile.total_cycle_wait_ms(),
-                            telem.elapsed_seconds
+                            self.cached_cycle_wait_ms, telem.elapsed_seconds
                         ))
                         .monospace()
                         .size(11.0)
@@ -2526,7 +2550,6 @@ impl KeyForgeApp {
                     });
                     ui.add_space(4.0);
                     self.draw_primary_cta(ui, is_running, 34.0);
-                    let enabled_cnt = self.profile.actions.iter().filter(|a| a.enabled).count();
                     let mode_str = match self.profile.repeat_mode {
                         RepeatMode::Count => "Fixed Count",
                         RepeatMode::Infinite => "Infinite",
@@ -2535,9 +2558,10 @@ impl KeyForgeApp {
                     ui.centered_and_justified(|ui| {
                         ui.label(
                             RichText::new(format!(
-                                "{mode_str} \u{00B7} {enabled_cnt}/{} steps \u{00B7} {}ms",
+                                "{mode_str} \u{00B7} {}/{} steps \u{00B7} {}ms",
+                                self.cached_enabled_count,
                                 self.profile.actions.len(),
-                                self.profile.total_cycle_wait_ms()
+                                self.cached_cycle_wait_ms
                             ))
                             .size(10.5)
                             .color(TEXT_MUTED),
@@ -2641,56 +2665,93 @@ impl KeyForgeApp {
                 self.focus_filter_requested = false;
                 filter_resp.request_focus();
             }
+            if !self.filter_query.is_empty() {
+                let clear_clicked = ghost_button(ui, "\u{2715}", TEXT_MUTED)
+                    .on_hover_text("Clear filter (Esc)")
+                    .clicked();
+                let clear_esc =
+                    filter_resp.has_focus() && ui.input(|i| i.key_pressed(egui::Key::Escape));
+                if clear_clicked || clear_esc {
+                    self.filter_query.clear();
+                }
+            }
 
-            if styled_button(ui, "Undo", BTN_NEUTRAL, TEXT_SECONDARY, BORDER_SUBTLE).clicked() {
-                self.undo();
-            }
-            if styled_button(ui, "Redo", BTN_NEUTRAL, TEXT_SECONDARY, BORDER_SUBTLE).clicked() {
-                self.redo();
-            }
-            if styled_button(ui, "2\u{00D7}", BTN_NEUTRAL, TEXT_SECONDARY, BORDER_SUBTLE).clicked()
-            {
-                self.scale_wait_times(0.5);
-            }
-            if styled_button(
-                ui,
-                "0.5\u{00D7}",
-                BTN_NEUTRAL,
-                TEXT_SECONDARY,
-                BORDER_SUBTLE,
-            )
-            .clicked()
-            {
-                self.scale_wait_times(2.0);
-            }
-            if styled_button(ui, "All On", BTN_NEUTRAL, TEXT_SECONDARY, BORDER_SUBTLE).clicked() {
-                self.record_undo();
-                for a in &mut self.profile.actions {
-                    a.enabled = true;
+            let undo_len = self.undo_stack.len();
+            ui.add_enabled_ui(undo_len > 0, |ui| {
+                if styled_button(ui, "Undo", BTN_NEUTRAL, TEXT_SECONDARY, BORDER_SUBTLE)
+                    .on_hover_text(format!("Undo ({undo_len} available)"))
+                    .clicked()
+                {
+                    self.undo();
                 }
-                self.on_sequence_mutated(true);
-            }
-            if styled_button(ui, "All Off", BTN_NEUTRAL, TEXT_SECONDARY, BORDER_SUBTLE).clicked() {
-                self.record_undo();
-                for a in &mut self.profile.actions {
-                    a.enabled = false;
+            });
+            let redo_len = self.redo_stack.len();
+            ui.add_enabled_ui(redo_len > 0, |ui| {
+                if styled_button(ui, "Redo", BTN_NEUTRAL, TEXT_SECONDARY, BORDER_SUBTLE)
+                    .on_hover_text(format!("Redo ({redo_len} available)"))
+                    .clicked()
+                {
+                    self.redo();
                 }
-                self.on_sequence_mutated(true);
-            }
-            if styled_button(ui, "Flip", BTN_NEUTRAL, TEXT_SECONDARY, BORDER_SUBTLE).clicked() {
-                self.record_undo();
-                self.profile.actions.reverse();
-                self.on_sequence_mutated(true);
-                self.log_event("Reversed step sequence order.");
-            }
+            });
+            let has_actions = !self.profile.actions.is_empty();
+            ui.add_enabled_ui(has_actions, |ui| {
+                if styled_button(ui, "2\u{00D7}", BTN_NEUTRAL, TEXT_SECONDARY, BORDER_SUBTLE)
+                    .on_hover_text("Halve all wait durations (2\u{00D7} faster)")
+                    .clicked()
+                {
+                    self.scale_wait_times(0.5);
+                }
+                if styled_button(
+                    ui,
+                    "0.5\u{00D7}",
+                    BTN_NEUTRAL,
+                    TEXT_SECONDARY,
+                    BORDER_SUBTLE,
+                )
+                .on_hover_text("Double all wait durations (2\u{00D7} slower)")
+                .clicked()
+                {
+                    self.scale_wait_times(2.0);
+                }
+                if styled_button(ui, "All On", BTN_NEUTRAL, TEXT_SECONDARY, BORDER_SUBTLE)
+                    .on_hover_text("Enable all steps in sequence")
+                    .clicked()
+                {
+                    self.record_undo();
+                    for a in &mut self.profile.actions {
+                        a.enabled = true;
+                    }
+                    self.on_sequence_mutated(true);
+                }
+                if styled_button(ui, "All Off", BTN_NEUTRAL, TEXT_SECONDARY, BORDER_SUBTLE)
+                    .on_hover_text("Disable all steps in sequence")
+                    .clicked()
+                {
+                    self.record_undo();
+                    for a in &mut self.profile.actions {
+                        a.enabled = false;
+                    }
+                    self.on_sequence_mutated(true);
+                }
+                if styled_button(ui, "Flip", BTN_NEUTRAL, TEXT_SECONDARY, BORDER_SUBTLE)
+                    .on_hover_text("Reverse step sequence order")
+                    .clicked()
+                {
+                    self.record_undo();
+                    self.profile.actions.reverse();
+                    self.on_sequence_mutated(true);
+                    self.log_event("Reversed step sequence order.");
+                }
+            });
 
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                let enabled_cnt = self.profile.actions.iter().filter(|a| a.enabled).count();
                 ui.label(
                     RichText::new(format!(
-                        "{enabled_cnt}/{} active \u{00B7} {}ms",
+                        "{}/{} active \u{00B7} {}ms",
+                        self.cached_enabled_count,
                         self.profile.actions.len(),
-                        self.profile.total_cycle_wait_ms()
+                        self.cached_cycle_wait_ms
                     ))
                     .monospace()
                     .size(11.0)
@@ -3439,7 +3500,7 @@ impl KeyForgeApp {
                                     ui.add_space(8.0);
                                     ui.add(
                                         egui::Label::new(
-                                            RichText::new("Recorded steps filter out KeyForge synthetic playback inputs and your control hotkeys.")
+                                            RichText::new("Recorded steps filter out kTap synthetic playback inputs and your control hotkeys.")
                                                 .size(11.0)
                                                 .color(TEXT_SECONDARY),
                                         )
@@ -3573,7 +3634,7 @@ impl KeyForgeApp {
     }
 }
 
-impl eframe::App for KeyForgeApp {
+impl eframe::App for KTapApp {
     fn update(&mut self, ctx: &Context, _frame: &mut eframe::Frame) {
         if !self.branded_window {
             self.branded_window = true;

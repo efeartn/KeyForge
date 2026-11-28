@@ -1,4 +1,4 @@
-//! Always-on-top compact floating Mini-HUD viewport pill for KeyForge.
+//! Always-on-top compact floating Mini-HUD viewport pill for kTap.
 
 use egui::{Color32, Context, RichText, Rounding, Stroke, ViewportBuilder, ViewportId};
 
@@ -26,9 +26,9 @@ pub fn show_mini_hud(
 ) -> MiniHudAction {
     let mut result = MiniHudAction::None;
 
-    let vp_id = ViewportId::from_hash_of("keyforge_mini_hud");
+    let vp_id = ViewportId::from_hash_of("ktap_mini_hud");
     let builder = ViewportBuilder::default()
-        .with_title("KeyForge HUD")
+        .with_title("kTap HUD")
         .with_inner_size([432.0, 70.0])
         .with_resizable(false)
         .with_always_on_top();

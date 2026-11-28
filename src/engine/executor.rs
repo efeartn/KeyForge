@@ -74,6 +74,47 @@ struct SharedControl {
     time_scale: f64,
 }
 
+struct CompiledStep {
+    id: String,
+    kind: CompiledKind,
+}
+
+enum CompiledKind {
+    KeyPress {
+        keys: Vec<KeyInfo>,
+        hold_ms: i64,
+    },
+    KeyDown {
+        key: KeyInfo,
+    },
+    KeyUp {
+        key: KeyInfo,
+    },
+    MouseClick {
+        x: Option<i64>,
+        y: Option<i64>,
+        button: MouseButton,
+        click_type: ClickType,
+        hold_ms: i64,
+    },
+    MouseMove {
+        pos: Option<(i64, i64)>,
+        relative: bool,
+    },
+    MouseScroll {
+        dx: i64,
+        dy: i64,
+    },
+    Wait {
+        wait_ms: i64,
+        jitter_ms: i64,
+    },
+    RepeatBlock {
+        repeat_count: i64,
+        sub_steps: Vec<CompiledStep>,
+    },
+}
+
 /// Executes [`MacroProfile`]s with sub-millisecond cancelability and guaranteed input release.
 pub struct MacroExecutor {
     ctrl: Arc<Mutex<SharedControl>>,
@@ -167,7 +208,7 @@ impl MacroExecutor {
             let ctrl = Arc::clone(&self.ctrl);
             let cv = Arc::clone(&self.stop_cv);
             let handle = std::thread::Builder::new()
-                .name("KeyForge-Executor".to_string())
+                .name("kTap-Executor".to_string())
                 .spawn(move || Self::run_worker(ctrl, cv, profile))
                 .map_err(|e| format!("Failed to spawn executor thread: {e}"))?;
             *guard = Some(handle);
@@ -247,16 +288,59 @@ impl MacroExecutor {
         }
     }
 
-    fn run_worker(ctrl: Arc<Mutex<SharedControl>>, cv: Arc<Condvar>, profile: MacroProfile) {
-        let enabled_actions: Vec<MacroAction> = profile
-            .actions
-            .iter()
-            .filter(|a| a.enabled)
-            .cloned()
-            .collect();
+    fn compile_actions(actions: &[MacroAction]) -> Result<Vec<CompiledStep>, String> {
+        let mut out = Vec::new();
+        for action in actions {
+            if !action.enabled {
+                continue;
+            }
+            let kind = match action.action_type {
+                ActionType::KeyPress => CompiledKind::KeyPress {
+                    keys: parse_key_combo(&action.key)?,
+                    hold_ms: action.hold_ms,
+                },
+                ActionType::KeyDown => CompiledKind::KeyDown {
+                    key: resolve_single_key(&action.key)?,
+                },
+                ActionType::KeyUp => CompiledKind::KeyUp {
+                    key: resolve_single_key(&action.key)?,
+                },
+                ActionType::MouseClick => CompiledKind::MouseClick {
+                    x: action.x,
+                    y: action.y,
+                    button: action.button,
+                    click_type: action.click_type,
+                    hold_ms: action.hold_ms,
+                },
+                ActionType::MouseMove => CompiledKind::MouseMove {
+                    pos: action.x.zip(action.y),
+                    relative: action.move_mode == MoveMode::Relative,
+                },
+                ActionType::MouseScroll => CompiledKind::MouseScroll {
+                    dx: action.scroll_dx,
+                    dy: action.scroll_dy,
+                },
+                ActionType::Wait => CompiledKind::Wait {
+                    wait_ms: action.wait_ms,
+                    jitter_ms: action.jitter_ms,
+                },
+                ActionType::RepeatBlock => CompiledKind::RepeatBlock {
+                    repeat_count: action.repeat_count,
+                    sub_steps: Self::compile_actions(&action.sub_actions)?,
+                },
+            };
+            out.push(CompiledStep {
+                id: action.id.clone(),
+                kind,
+            });
+        }
+        Ok(out)
+    }
 
+    fn run_worker(ctrl: Arc<Mutex<SharedControl>>, cv: Arc<Condvar>, profile: MacroProfile) {
         let res = (|| -> Result<(), String> {
-            if enabled_actions.is_empty() {
+            let compiled_actions = Self::compile_actions(&profile.actions)?;
+            if compiled_actions.is_empty() {
                 return Ok(());
             }
 
@@ -282,7 +366,7 @@ impl MacroExecutor {
                 }
 
                 let cycle_start = Instant::now();
-                Self::execute_action_list(&ctrl, &cv, &enabled_actions, &profile)?;
+                Self::execute_action_list(&ctrl, &cv, &compiled_actions, &profile)?;
 
                 let has_more_cycles = {
                     let mut st = ctrl.lock().expect("executor lock");
@@ -341,13 +425,10 @@ impl MacroExecutor {
     fn execute_action_list(
         ctrl: &Arc<Mutex<SharedControl>>,
         cv: &Arc<Condvar>,
-        actions: &[MacroAction],
+        actions: &[CompiledStep],
         profile: &MacroProfile,
     ) -> Result<(), String> {
         for action in actions {
-            if !action.enabled {
-                continue;
-            }
             {
                 let mut st = ctrl.lock().expect("executor lock");
                 if st.stop_requested {
@@ -364,7 +445,7 @@ impl MacroExecutor {
                 }
                 st.telemetry.current_action_id = Some(action.id.clone());
             }
-            Self::execute_single_action(ctrl, cv, action, profile)?;
+            Self::execute_single_action(ctrl, cv, &action.kind, profile)?;
         }
         Ok(())
     }
@@ -372,47 +453,50 @@ impl MacroExecutor {
     fn execute_single_action(
         ctrl: &Arc<Mutex<SharedControl>>,
         cv: &Arc<Condvar>,
-        action: &MacroAction,
+        action: &CompiledKind,
         profile: &MacroProfile,
     ) -> Result<(), String> {
-        match action.action_type {
-            ActionType::KeyPress => {
-                let keys = parse_key_combo(&action.key)?;
-                for &k in &keys {
+        match action {
+            CompiledKind::KeyPress { keys, hold_ms } => {
+                for &k in keys {
                     if ctrl.lock().expect("executor lock").stop_requested {
                         return Ok(());
                     }
                     Self::safe_key_down(ctrl, k);
                 }
-                if action.hold_ms > 0 {
-                    Self::interruptible_wait(ctrl, cv, action.hold_ms, 0);
+                if *hold_ms > 0 {
+                    Self::interruptible_wait(ctrl, cv, *hold_ms, 0);
                 }
                 for &k in keys.iter().rev() {
                     Self::safe_key_up(ctrl, k);
                 }
                 Self::increment_actions(ctrl);
             }
-            ActionType::KeyDown => {
-                let k = resolve_single_key(&action.key)?;
-                Self::safe_key_down(ctrl, k);
+            CompiledKind::KeyDown { key } => {
+                Self::safe_key_down(ctrl, *key);
                 Self::increment_actions(ctrl);
             }
-            ActionType::KeyUp => {
-                let k = resolve_single_key(&action.key)?;
-                Self::safe_key_up(ctrl, k);
+            CompiledKind::KeyUp { key } => {
+                Self::safe_key_up(ctrl, *key);
                 Self::increment_actions(ctrl);
             }
-            ActionType::MouseClick => {
-                if let (Some(cx), Some(cy)) = (action.x, action.y) {
+            CompiledKind::MouseClick {
+                x,
+                y,
+                button,
+                click_type,
+                hold_ms,
+            } => {
+                if let (Some(cx), Some(cy)) = (*x, *y) {
                     let backend = Arc::clone(&ctrl.lock().expect("executor lock").backend);
                     backend.move_cursor(cx, cy, false);
                 }
-                let btn = action.button;
-                match action.click_type {
+                let btn = *button;
+                match click_type {
                     ClickType::Single => {
                         Self::safe_mouse_down(ctrl, btn);
-                        if action.hold_ms > 0 {
-                            Self::interruptible_wait(ctrl, cv, action.hold_ms, 0);
+                        if *hold_ms > 0 {
+                            Self::interruptible_wait(ctrl, cv, *hold_ms, 0);
                         }
                         Self::safe_mouse_up(ctrl, btn);
                     }
@@ -422,8 +506,8 @@ impl MacroExecutor {
                                 break;
                             }
                             Self::safe_mouse_down(ctrl, btn);
-                            if action.hold_ms > 0 {
-                                Self::interruptible_wait(ctrl, cv, action.hold_ms, 0);
+                            if *hold_ms > 0 {
+                                Self::interruptible_wait(ctrl, cv, *hold_ms, 0);
                             }
                             Self::safe_mouse_up(ctrl, btn);
                             if idx == 0 && !ctrl.lock().expect("executor lock").stop_requested {
@@ -436,34 +520,31 @@ impl MacroExecutor {
                 }
                 Self::increment_actions(ctrl);
             }
-            ActionType::MouseMove => {
-                if let (Some(cx), Some(cy)) = (action.x, action.y) {
+            CompiledKind::MouseMove { pos, relative } => {
+                if let Some((cx, cy)) = *pos {
                     let backend = Arc::clone(&ctrl.lock().expect("executor lock").backend);
-                    backend.move_cursor(cx, cy, action.move_mode == MoveMode::Relative);
+                    backend.move_cursor(cx, cy, *relative);
                     Self::increment_actions(ctrl);
                 }
             }
-            ActionType::MouseScroll => {
+            CompiledKind::MouseScroll { dx, dy } => {
                 let backend = Arc::clone(&ctrl.lock().expect("executor lock").backend);
-                backend.scroll(action.scroll_dx, action.scroll_dy);
+                backend.scroll(*dx, *dy);
                 Self::increment_actions(ctrl);
             }
-            ActionType::Wait => {
-                Self::interruptible_wait(ctrl, cv, action.wait_ms, action.jitter_ms);
+            CompiledKind::Wait { wait_ms, jitter_ms } => {
+                Self::interruptible_wait(ctrl, cv, *wait_ms, *jitter_ms);
                 Self::increment_actions(ctrl);
             }
-            ActionType::RepeatBlock => {
-                let subs: Vec<MacroAction> = action
-                    .sub_actions
-                    .iter()
-                    .filter(|s| s.enabled)
-                    .cloned()
-                    .collect();
-                for _ in 0..action.repeat_count {
+            CompiledKind::RepeatBlock {
+                repeat_count,
+                sub_steps,
+            } => {
+                for _ in 0..*repeat_count {
                     if ctrl.lock().expect("executor lock").stop_requested {
                         break;
                     }
-                    Self::execute_action_list(ctrl, cv, &subs, profile)?;
+                    Self::execute_action_list(ctrl, cv, sub_steps, profile)?;
                 }
             }
         }

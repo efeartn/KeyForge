@@ -13,7 +13,7 @@ pub const VK_XBUTTON2: u16 = 0x06;
 
 /// One-line Linux command enabling non-root access to `/dev/uinput` and `/dev/input/event*` on Wayland.
 pub fn wayland_udev_setup_command() -> &'static str {
-    "echo 'KERNEL==\"uinput\", GROUP=\"input\", MODE=\"0660\", OPTIONS+=\"static_node=uinput\"' | sudo tee /etc/udev/rules.d/99-keyforge-uinput.rules >/dev/null && sudo usermod -aG input $USER && sudo udevadm control --reload-rules && sudo udevadm trigger /dev/uinput"
+    "echo 'KERNEL==\"uinput\", GROUP=\"input\", MODE=\"0660\", OPTIONS+=\"static_node=uinput\"' | sudo tee /etc/udev/rules.d/99-ktap-uinput.rules >/dev/null && sudo usermod -aG input $USER && sudo udevadm control --reload-rules && sudo udevadm trigger /dev/uinput"
 }
 
 /// Describes input injection, key polling, and permission status on the active OS.
@@ -176,7 +176,7 @@ pub fn get_platform_capabilities() -> PlatformInputCapabilities {
             let notice = if can_poll {
                 String::new()
             } else {
-                "Native Wayland uinput injection active! For global F6/F7/F12 hotkeys outside focused window, add your user to the `input` group (`keyforge --wayland-setup`).".to_string()
+                "Native Wayland uinput injection active! For global F6/F7/F12 hotkeys outside focused window, add your user to the `input` group (`ktap --wayland-setup`).".to_string()
             };
             return PlatformInputCapabilities {
                 platform: "linux",
@@ -197,7 +197,7 @@ pub fn get_platform_capabilities() -> PlatformInputCapabilities {
                 can_poll_keys: true,
                 can_poll_cursor: true,
                 requires_permission: true,
-                notice: "Wayland detected: XWayland fallback active (injects into XWayland apps). Enable native Wayland `/dev/uinput` for all compositors (`keyforge --wayland-setup`).".to_string(),
+                notice: "Wayland detected: XWayland fallback active (injects into XWayland apps). Enable native Wayland `/dev/uinput` for all compositors (`ktap --wayland-setup`).".to_string(),
             };
         }
 

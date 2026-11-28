@@ -14,14 +14,19 @@ pub const MAX_REPEAT_NESTING_DEPTH: usize = 5; // Max nested REPEAT_BLOCK depth
 pub const MAX_EXPANDED_OPS_PER_CYCLE: usize = 100_000; // Prevents "Billion Laughs" nested repeat bombs
 pub const MIN_SAFE_CYCLE_DELAY_MS: i64 = 5; // Minimum OS input queue safety yield per cycle
 
-const ALLOWED_FILE_EXTENSIONS: &[&str] = &["json", "kfmacro"];
+const ALLOWED_FILE_EXTENSIONS: &[&str] = &["json", "ktap", "kfmacro"];
 
 const WINDOWS_RESERVED_STEMS: &[&str] = &[
     "CON", "PRN", "AUX", "NUL", "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8",
     "COM9", "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9",
 ];
 
-pub const ALLOWED_ENVELOPE_KEYS: &[&str] = &["keyforge_format", "integrity_sha256", "profile"];
+pub const ALLOWED_ENVELOPE_KEYS: &[&str] = &[
+    "ktap_format",
+    "keyforge_format",
+    "integrity_sha256",
+    "profile",
+];
 
 pub const ALLOWED_PROFILE_KEYS: &[&str] = &[
     "schema_version",
@@ -59,7 +64,7 @@ pub const ALLOWED_ACTION_KEYS: &[&str] = &[
     "sub_actions",
 ];
 
-/// Raised when a profile or file violates KeyForge security constraints.
+/// Raised when a profile or file violates kTap security constraints.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SecurityValidationError {
     pub message: String,
@@ -192,7 +197,7 @@ pub fn validate_safe_file_path(
         .unwrap_or_default();
     if !ALLOWED_FILE_EXTENSIONS.contains(&ext.as_str()) {
         return Err(SecurityValidationError::new(format!(
-            "Unsupported file extension '.{ext}'. Allowed: .json, .kfmacro"
+            "Unsupported file extension '.{ext}'. Allowed: .json, .ktap, .kfmacro"
         )));
     }
 

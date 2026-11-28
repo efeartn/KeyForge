@@ -173,7 +173,7 @@ pub fn audit_profile(profile: &MacroProfile) -> AuditReport {
     // 1. Empty macro
     if enabled_flat.is_empty() {
         findings.push(AuditFinding {
-            code: "KF-SEC-000".to_string(),
+            code: "KT-SEC-000".to_string(),
             severity: AuditSeverity::Info,
             title: "No Enabled Steps".to_string(),
             description: "The profile currently has no enabled macro steps to execute.".to_string(),
@@ -183,7 +183,7 @@ pub fn audit_profile(profile: &MacroProfile) -> AuditReport {
         return AuditReport { findings };
     }
 
-    // 2. Zero-delay loop starvation (KF-SEC-001)
+    // 2. Zero-delay loop starvation (KT-SEC-001)
     let total_wait = profile.total_cycle_wait_ms();
     let is_repeating = matches!(
         profile.repeat_mode,
@@ -191,12 +191,12 @@ pub fn audit_profile(profile: &MacroProfile) -> AuditReport {
     ) || (profile.repeat_mode == RepeatMode::Count && profile.repeat_count > 1);
     if is_repeating && total_wait < MIN_SAFE_CYCLE_DELAY_MS {
         findings.push(AuditFinding {
-            code: "KF-SEC-001".to_string(),
+            code: "KT-SEC-001".to_string(),
             severity: AuditSeverity::Warning,
             title: "Zero-Delay Loop Detected (Auto-Governor Active)".to_string(),
             description: format!(
                 "Total cycle wait time is {total_wait}ms. Running a loop without delays can \
-                 flood the OS input queue. KeyForge will automatically enforce a \
+                 flood the OS input queue. kTap will automatically enforce a \
                  {MIN_SAFE_CYCLE_DELAY_MS}ms safety yield per cycle."
             ),
             remediation: "Add a Wait step (e.g., 50ms-200ms) or set Inter-Cycle Delay >= 10ms."
@@ -204,7 +204,7 @@ pub fn audit_profile(profile: &MacroProfile) -> AuditReport {
         });
     }
 
-    // 3. Unbalanced KEY_DOWN / MOUSE_DOWN (KF-SEC-002)
+    // 3. Unbalanced KEY_DOWN / MOUSE_DOWN (KT-SEC-002)
     let mut held_keys: BTreeSet<String> = BTreeSet::new();
     let mut held_buttons: BTreeSet<String> = BTreeSet::new();
     for act in &enabled_flat {
@@ -233,12 +233,12 @@ pub fn audit_profile(profile: &MacroProfile) -> AuditReport {
             items.push(format!("Mouse:{b}"));
         }
         findings.push(AuditFinding {
-            code: "KF-SEC-002".to_string(),
+            code: "KT-SEC-002".to_string(),
             severity: AuditSeverity::Warning,
             title: "Unbalanced Key/Button Hold in Sequence".to_string(),
             description: format!(
                 "Inputs {} are pressed down without a matching release step in the sequence. \
-                 KeyForge's EmergencyInputSanitizer will automatically release them when the macro stops.",
+                 kTap's EmergencyInputSanitizer will automatically release them when the macro stops.",
                 items.join(", ")
             ),
             remediation:
@@ -247,7 +247,7 @@ pub fn audit_profile(profile: &MacroProfile) -> AuditReport {
         });
     }
 
-    // 4. Dangerous system shortcuts (KF-SEC-003), including modifier variants & split KeyDowns
+    // 4. Dangerous system shortcuts (KT-SEC-003), including modifier variants & split KeyDowns
     let mut active_modifiers: BTreeSet<String> = BTreeSet::new();
     let mut reported_dangerous: BTreeSet<&str> = BTreeSet::new();
     for act in &enabled_flat {
@@ -280,7 +280,7 @@ pub fn audit_profile(profile: &MacroProfile) -> AuditReport {
             {
                 reported_dangerous.insert(label);
                 findings.push(AuditFinding {
-                    code: "KF-SEC-003".to_string(),
+                    code: "KT-SEC-003".to_string(),
                     severity: AuditSeverity::Critical,
                     title: format!("Sensitive System Shortcut Detected: [{label}]"),
                     description: format!("Sequence dispatches [{label}]: {reason}"),
@@ -292,14 +292,14 @@ pub fn audit_profile(profile: &MacroProfile) -> AuditReport {
         }
     }
 
-    // 5. Extreme click rate > 100 CPS (KF-SEC-004)
+    // 5. Extreme click rate > 100 CPS (KT-SEC-004)
     let click_count = count_expanded_clicks(&profile.actions);
     let effective_wait = total_wait.max(MIN_SAFE_CYCLE_DELAY_MS);
     if click_count > 0 {
         let estimated_cps = (click_count as f64 * 1000.0) / (effective_wait as f64);
         if estimated_cps > 100.0 {
             findings.push(AuditFinding {
-                code: "KF-SEC-004".to_string(),
+                code: "KT-SEC-004".to_string(),
                 severity: AuditSeverity::Warning,
                 title: format!("Extreme Click Rate (~{estimated_cps:.0} CPS)"),
                 description: format!(
@@ -312,7 +312,7 @@ pub fn audit_profile(profile: &MacroProfile) -> AuditReport {
         }
     }
 
-    // 6. Hotkey self-collision (KF-SEC-005)
+    // 6. Hotkey self-collision (KT-SEC-005)
     let control_hotkeys = [
         profile.start_stop_hotkey.as_str(),
         profile.panic_hotkey.as_str(),
@@ -323,12 +323,12 @@ pub fn audit_profile(profile: &MacroProfile) -> AuditReport {
             && control_hotkeys.contains(&act.key.as_str())
         {
             findings.push(AuditFinding {
-                code: "KF-SEC-005".to_string(),
+                code: "KT-SEC-005".to_string(),
                 severity: AuditSeverity::Info,
                 title: format!("Step Uses Control Hotkey [{}]", act.key),
                 description: format!(
-                    "Macro step sends [{}], which is also assigned as a KeyForge hotkey. \
-                     KeyForge stamps synthetic inputs with 0x4B465247 to prevent self-triggering.",
+                    "Macro step sends [{}], which is also assigned as a kTap hotkey. \
+                     kTap stamps synthetic inputs with 0x4B544150 to prevent self-triggering.",
                     act.key
                 ),
                 remediation:
